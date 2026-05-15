@@ -546,7 +546,7 @@ export const resetPassword = async (req: Request, res: Response) => {
   }
 };
 
-export const checkAuthenticated = (req: AuthRequest, res: Response) => {
+export const checkAuthenticated =  async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -562,3 +562,14 @@ export const checkAuthenticated = (req: AuthRequest, res: Response) => {
   }
 };
 
+
+export const countTotalBoarders = async (req: Request, res: Response) => {
+   try{
+        const total = await pool.query("SELECT COUNT(*) FROM users WHERE user_type='Boarder'");
+        res.json({ total: total.rows[0].count });
+   }
+  catch (error: any) {
+  console.log(error);
+  res.status(500).json({ message: error.message,});
+}
+}

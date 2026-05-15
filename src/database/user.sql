@@ -8,7 +8,7 @@ CREATE TABLE users (
   address TEXT,
   password TEXT NOT NULL,
   avatar_url TEXT, 
-  is_assigned BOOLEAN DEFAULT FALSE;
+  is_assigned BOOLEAN DEFAULT FALSE,
   user_type VARCHAR(20) NOT NULL CHECK (user_type IN ('Admin', 'Staff', 'Boarder')),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

@@ -31,7 +31,7 @@ export const paymentTemplate = (p: any, title: string, subtitle: string) => {
                 <strong>Details:</strong><br/>
                 • Amount Due: <strong>₱${Number(p.amount).toLocaleString()}</strong><br/>
                 • Due Date: <strong>${new Date(p.due_date).toLocaleDateString()}</strong><br/>
-                • Room/Unit: <strong>${p.room_number} • Bed ${p.bed_number}</strong><br/><br/>
+                • Room/Unit: <strong>#${p.room_number} • ${p.bed_number}</strong><br/><br/>
 
                 Please settle your payment on time.
               </td>

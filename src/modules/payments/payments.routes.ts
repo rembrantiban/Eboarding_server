@@ -1,6 +1,6 @@
 import express from "express";
 import { checkAuth } from "../../middleware/checkAuth";
-import { getPaymentReport, sendPaymentReminders, markPaymentAsPaid, getCalendarPayments, getMyPaidPayments, getReport } from "./payments.controller";
+import { getPaymentReport, sendPaymentReminders, markPaymentAsPaid, getCalendarPayments, getMyPaidPayments, getReport, getPaymentAnalytics } from "./payments.controller";
 
 
 const router = express.Router();
@@ -19,5 +19,6 @@ router.get("/test-reminders", async (req, res) => {
     res.status(500).json({ success: false, message: "Error running reminders" });
   }
 });
+router.get("/payment-analytics", checkAuth, getPaymentAnalytics);
 
 export default router;

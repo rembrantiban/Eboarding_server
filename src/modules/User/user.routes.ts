@@ -10,6 +10,7 @@ import {
         checkAuthenticated,
         updateUser,
         updateProfile,
+        countTotalBoarders,
        } from './user.controller'
 import { verifyAdmin } from "../../middleware/authMiddleware"
 import { checkAuth } from "../../middleware/checkAuth"
@@ -27,5 +28,6 @@ router.post("/reset-password", resetPassword);
 router.put("/updateUser/:id",checkAuth,updateUser);
 router.put("/updateProfile", checkAuth,upload.single("avatar"), updateProfile);
 router.get("/check-auth", checkAuth, checkAuthenticated);
+router.get("/total-boarders",checkAuth, countTotalBoarders);
 
-export default router
+export default router   

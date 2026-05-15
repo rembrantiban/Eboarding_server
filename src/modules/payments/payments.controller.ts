@@ -1,4 +1,4 @@
-import { Request,Response } from "express";
+import { Request, Response } from "express";
 import { pool } from "../../config/db";
 import { resend } from "../../config/resend"
 import { paymentTemplate } from "../../services/paymentEmailTemplate";
@@ -88,7 +88,7 @@ export const getReport = async (req: Request, res: Response) => {
 export const sendPaymentReminders = async () => {
   try {
 
-   await pool.query(`
+    await pool.query(`
       UPDATE payments
       SET 
         status = 'Overdue',
@@ -113,7 +113,7 @@ export const sendPaymentReminders = async () => {
     `);
 
     console.log("1-day:", oneDayBefore.rows.length);
-      
+
     for (const p of oneDayBefore.rows) {
       console.log(`📧 Sending (1-day) to ${p.email}`);
 
@@ -130,7 +130,7 @@ export const sendPaymentReminders = async () => {
         `UPDATE payments SET reminder_1day_sent = TRUE WHERE id = $1`,
         [p.id]
       );
-      
+
     }
 
     const dueToday = await pool.query(`
@@ -148,34 +148,34 @@ export const sendPaymentReminders = async () => {
 
     console.log("due today:", dueToday.rows.length);
 
-   for (const p of dueToday.rows) {
-  console.log(`📧 Sending (today) to ${p.email}`);
+    for (const p of dueToday.rows) {
+      console.log(`📧 Sending (today) to ${p.email}`);
 
 
-  const response = await resend.emails.send({
-    from: "E-Boarding <noreply@eboarding.site>",
-    to: p.email, 
-    subject: "📅 Payment Due Today",
-    html: paymentTemplate(p, "Payment Due Today", "Please pay today"),
-  });
+      const response = await resend.emails.send({
+        from: "E-Boarding <noreply@eboarding.site>",
+        to: p.email,
+        subject: "📅 Payment Due Today",
+        html: paymentTemplate(p, "Payment Due Today", "Please pay today"),
+      });
 
-  if (response.error) {
-    console.error(` Email failed for ${p.email}:`, response.error);
-  } else {
-    console.log(` Email sent to ${p.email}`, response.data?.id);
-  }
+      if (response.error) {
+        console.error(` Email failed for ${p.email}:`, response.error);
+      } else {
+        console.log(` Email sent to ${p.email}`, response.data?.id);
+      }
 
-  console.log("RESEND RESPONSE:", response);
+      console.log("RESEND RESPONSE:", response);
 
-  await pool.query(
-    `UPDATE payments SET reminder_due_sent = TRUE WHERE id = $1`,
-    [p.id]
-  );
+      await pool.query(
+        `UPDATE payments SET reminder_due_sent = TRUE WHERE id = $1`,
+        [p.id]
+      );
 
-  await new Promise((resolve) => setTimeout(resolve, 600));
-}
+      await new Promise((resolve) => setTimeout(resolve, 600));
+    }
 
-   const overdue = await pool.query(`
+    const overdue = await pool.query(`
     SELECT 
       p.*,
       u.email,
@@ -343,7 +343,7 @@ export const getCalendarPayments = async (req: Request, res: Response) => {
     const events = result.rows.map((p) => {
       let color = "#3b82f6"; // default (blue)
 
-      if (p.status === "Overdue") color = "#ef4444"; 
+      if (p.status === "Overdue") color = "#ef4444";
       else if (p.status === "Pending") color = "#f59e0b";
       else if (p.status === "Paid") color = "#22c55e";
 
@@ -411,5 +411,68 @@ export const getMyPaidPayments = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error("User payment history error:", error);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+export const getPaymentAnalytics = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+
+    const result = await pool.query(`
+      WITH current_month AS (
+        SELECT
+          status,
+          COALESCE(SUM(amount + penalty_amount), 0) AS total,
+          COUNT(*) AS count
+        FROM payments
+        WHERE DATE_TRUNC('month', due_date)
+          = DATE_TRUNC('month', CURRENT_DATE)
+        GROUP BY status
+      ),
+
+      previous_month AS (
+        SELECT
+          status,
+          COALESCE(SUM(amount + penalty_amount), 0) AS total,
+          COUNT(*) AS count
+        FROM payments
+        WHERE DATE_TRUNC('month', due_date)
+          = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+        GROUP BY status
+      )
+
+      SELECT
+        COALESCE(c.status, p.status) AS name,
+
+        COALESCE(c.total, 0) AS current,
+        COALESCE(p.total, 0) AS previous,
+
+        COALESCE(c.count, 0) AS count,
+        COALESCE(p.count, 0) AS "prevCount"
+
+      FROM current_month c
+      FULL OUTER JOIN previous_month p
+        ON c.status = p.status
+    `);
+
+    const formatted = result.rows.map((row) => ({
+      name: row.name,
+      current: Number(row.current),
+      previous: Number(row.previous),
+      count: Number(row.count),
+      prevCount: Number(row.prevCount),
+    }));
+
+    res.json(formatted);
+
+  } catch (error) {
+    console.error("Analytics error:", error);
+
+    res.status(500).json({
+      message: "Server error",
+    });
   }
 };

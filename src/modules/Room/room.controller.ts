@@ -428,17 +428,14 @@ export const getAvailableRoomsWithBeds = async (req: Request, res: Response) => 
     r.price_per_month,
     r.description,
 
-    -- ✅ CORRECT COUNTS (NO DUPLICATION)
     COALESCE(beds_data.available_beds, 0) AS available_beds,
     COALESCE(beds_data.total_beds, 0) AS total_beds,
     COALESCE(beds_data.beds, '[]') AS beds,
 
-    -- ✅ IMAGES (SEPARATE AGGREGATION)
     COALESCE(images_data.images, '[]') AS images
 
   FROM rooms r
 
-  -- 🔥 BEDS SUBQUERY
   LEFT JOIN (
     SELECT 
       room_id,
@@ -456,7 +453,6 @@ export const getAvailableRoomsWithBeds = async (req: Request, res: Response) => 
     GROUP BY room_id
   ) beds_data ON beds_data.room_id = r.id
 
-  -- 🔥 IMAGES SUBQUERY
   LEFT JOIN (
     SELECT 
       room_id,
@@ -465,7 +461,6 @@ export const getAvailableRoomsWithBeds = async (req: Request, res: Response) => 
     GROUP BY room_id
   ) images_data ON images_data.room_id = r.id
 
-  -- ✅ ONLY ROOMS WITH AVAILABLE BEDS
   WHERE COALESCE(beds_data.available_beds, 0) > 0
 
   ORDER BY r.id DESC
@@ -476,5 +471,68 @@ export const getAvailableRoomsWithBeds = async (req: Request, res: Response) => 
   } catch (error) {
     console.error("Get available rooms error:", error);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const getDashboardStats = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+
+    // TOTAL ROOMS
+    const totalRoomsQuery = await pool.query(`
+      SELECT COUNT(*) FROM rooms
+    `);
+
+    // FULLY OCCUPIED ROOMS
+    const fullyOccupiedQuery = await pool.query(`
+      SELECT COUNT(*) 
+      FROM rooms
+      WHERE status = 'Occupied'
+    `);
+
+    // OCCUPIED BEDS
+    const occupiedBedsQuery = await pool.query(`
+      SELECT COUNT(*)
+      FROM beds
+      WHERE status = 'Occupied'
+    `);
+
+    // AVAILABLE BEDS
+    const availableBedsQuery = await pool.query(`
+      SELECT COUNT(*)
+      FROM beds
+      WHERE status = 'Available'
+    `);
+
+    res.json({
+      totalRooms: Number(
+        totalRoomsQuery.rows[0].count
+      ),
+
+      fullyOccupied: Number(
+        fullyOccupiedQuery.rows[0].count
+      ),
+
+      occupiedBeds: Number(
+        occupiedBedsQuery.rows[0].count
+      ),
+
+      availableBeds: Number(
+        availableBedsQuery.rows[0].count
+      ),
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Dashboard stats error:",
+      error
+    );
+
+    res.status(500).json({
+      message: "Server error",
+    });
   }
 };
