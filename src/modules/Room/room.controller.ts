@@ -536,3 +536,51 @@ export const getDashboardStats = async (
     });
   }
 };
+
+
+export const getOccupancyTrend = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+
+    const result = await pool.query(`
+      SELECT
+        TO_CHAR(
+          DATE_TRUNC('month', created_at),
+          'Mon'
+        ) AS month,
+
+        COUNT(*) AS occupied
+
+      FROM boarders
+
+      WHERE created_at >=
+        CURRENT_DATE - INTERVAL '6 months'
+
+      GROUP BY
+        DATE_TRUNC('month', created_at)
+
+      ORDER BY
+        DATE_TRUNC('month', created_at)
+    `)
+
+    res.json(
+      result.rows.map((row) => ({
+        month: row.month,
+        occupied: Number(row.occupied),
+      }))
+    )
+
+  } catch (error) {
+
+    console.error(
+      "Occupancy trend error:",
+      error
+    )
+
+    res.status(500).json({
+      message: "Server error",
+    })
+  }
+}

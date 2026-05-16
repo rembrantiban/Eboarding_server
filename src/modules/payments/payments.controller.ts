@@ -476,3 +476,107 @@ export const getPaymentAnalytics = async (
     });
   }
 };
+
+export const getRevenueDashboard = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+
+    const monthlyRevenue = await pool.query(`
+      SELECT
+        TO_CHAR(p.paid_at, 'Mon') AS month,
+        COALESCE(SUM(p.amount + p.penalty_amount), 0) AS revenue
+
+      FROM payments p
+
+      WHERE p.status = 'Paid'
+      AND p.paid_at IS NOT NULL
+
+      GROUP BY DATE_TRUNC('month', p.paid_at),
+               TO_CHAR(p.paid_at, 'Mon')
+
+      ORDER BY DATE_TRUNC('month', p.paid_at)
+    `)
+
+    const totalRevenue = await pool.query(`
+      SELECT
+        COALESCE(SUM(amount + penalty_amount), 0) AS total
+      FROM payments
+      WHERE status = 'Paid'
+    `)
+
+    const paidUsersCount = await pool.query(`
+      SELECT COUNT(DISTINCT boarder_id) AS total
+      FROM payments
+      WHERE status = 'Paid'
+    `)
+
+    const recentPaidUsers = await pool.query(`
+      SELECT
+        u.first_name,
+        u.last_name,
+
+        p.amount,
+
+        r.room_number,
+        bed.bed_number,
+
+        p.paid_at
+
+      FROM payments p
+
+      JOIN boarders b
+        ON p.boarder_id = b.id
+
+      JOIN users u
+        ON b.user_id = u.id
+
+      JOIN rooms r
+        ON b.room_id = r.id
+
+      JOIN beds bed
+        ON b.bed_id = bed.id
+
+      WHERE p.status = 'Paid'
+
+      ORDER BY p.paid_at DESC
+
+      LIMIT 5
+    `)
+
+    res.json({
+      revenue: monthlyRevenue.rows.map((r) => ({
+        month: r.month,
+        revenue: Number(r.revenue),
+      })),
+
+      totalRevenue: Number(
+        totalRevenue.rows[0].total
+      ),
+
+      paidUsers: Number(
+        paidUsersCount.rows[0].total
+      ),
+
+      recentPaidUsers: recentPaidUsers.rows.map((u) => ({
+        name: `${u.first_name} ${u.last_name}`,
+        amount: Number(u.amount),
+        room: `Room ${u.room_number}`,
+        bed:  u.bed_number,
+        paid_at: u.paid_at,
+      })),
+    })
+
+  } catch (error) {
+
+    console.error(
+      "Revenue dashboard error:",
+      error
+    )
+
+    res.status(500).json({
+      message: "Server error",
+    })
+  }
+}

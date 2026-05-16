@@ -573,3 +573,120 @@ export const countTotalBoarders = async (req: Request, res: Response) => {
   res.status(500).json({ message: error.message,});
 }
 }
+
+export const updateProfileSettings =
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user?.id;
+
+      const {
+        first_name,
+        last_name,
+        email,
+        password,
+      } = req.body;
+
+      console.log("📝 Update profile settings request:", {
+        userId,
+        hasFile: !!req.file,
+        fileName: req.file?.originalname,
+        fileSize: req.file?.size,
+        fields: { first_name, last_name, email, hasPassword: !!password }
+      });
+
+      let avatar_url: string | null = null;
+      let hasSetAvatar = false;
+
+      if (req.file) {
+        try {
+          const uploadResult = await new Promise<UploadApiResponse>((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream(
+              { folder: "avatars" },
+              (error, result) => {
+                if (error || !result) {
+                  console.error("❌ Cloudinary upload error:", error);
+                  return reject(error);
+                }
+                console.log("✅ Cloudinary upload success:", result.secure_url);
+                resolve(result);
+              }
+            );
+            stream.on("error", (err) => {
+              console.error("❌ Stream error:", err);
+              reject(err);
+            });
+            stream.end(req.file!.buffer);
+          });
+
+          avatar_url = uploadResult.secure_url;
+          hasSetAvatar = true;
+        } catch (uploadError) {
+          console.error("❌ Avatar upload failed:", uploadError);
+          throw uploadError;
+        }
+      }
+
+      let hashedPassword: string | null = null;
+
+      if (password && password.trim() !== "") {
+        hashedPassword = await bcrypt.hash(password, 10);
+      }
+
+      const updateQuery = `
+        UPDATE users
+        SET
+          first_name = COALESCE($1, first_name),
+          last_name = COALESCE($2, last_name),
+          email = COALESCE($3, email),
+          password = COALESCE($4, password),
+          ${hasSetAvatar ? "avatar_url = $5" : "avatar_url = COALESCE($5, avatar_url)"},
+          updated_at = NOW()
+        WHERE id = $6
+        RETURNING
+          id,
+          first_name,
+          last_name,
+          email,
+          username,
+          avatar_url,
+          user_type,
+          contact_number,
+          address,
+          created_at,
+          updated_at
+      `;
+
+      const result = await pool.query(updateQuery, [
+        first_name,
+        last_name,
+        email,
+        hashedPassword,
+        avatar_url,
+        userId,
+      ]);
+
+      if (!result.rows[0]) {
+        return res.status(404).json({
+          message: "User not found",
+        });
+      }
+
+      console.log("✅ Profile updated successfully:", {
+        userId,
+        hasAvatar: !!result.rows[0].avatar_url,
+      });
+
+      res.status(200).json({
+        message: "Profile updated successfully",
+        user: result.rows[0],
+      });
+
+    } catch (error) {
+      console.error("❌ Update profile settings error:", error);
+
+      res.status(500).json({
+        message:
+          "Failed to update profile: " + (error instanceof Error ? error.message : "Unknown error"),
+      });
+    }
+  };

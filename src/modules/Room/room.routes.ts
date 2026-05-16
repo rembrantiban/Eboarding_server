@@ -7,6 +7,7 @@ import {
   deleteRoom,
   getAvailableRoomsWithBeds,
   getDashboardStats,
+  getOccupancyTrend,
 } from "./room.controller";
 import { upload } from "../../lib/upload";
 
@@ -18,5 +19,6 @@ router.put("/update-room/:id", verifyAdmin, upload.array("images", 5), updateRoo
 router.delete("/delete/:id", verifyAdmin, deleteRoom);
 router.get("/available", getAvailableRoomsWithBeds);
 router.get("/dashboard-stats", getDashboardStats);
+router.get("/occupancy-trend", getOccupancyTrend);
 
 export default router;
