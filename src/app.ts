@@ -26,7 +26,7 @@ app.use("/api/payments", paymentRoutes)
 app.use("/api/announcements", announcements)
 app.use("/api/rules", rules)  
 app.get("/", (req, res) => {
-  res.send("API is running 🚀")
+  res.send("API is running ")
 })
 
 export default app  
