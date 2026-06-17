@@ -1,8 +1,9 @@
 import dotenv from "dotenv"
+dotenv.config()
 import app from "./app"
 import  "./jobs/cron"
+
 import { sendPaymentReminders } from "./modules/payments/payments.controller"
-dotenv.config()
 
 const PORT = process.env.PORT || 5000
 
