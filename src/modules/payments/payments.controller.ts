@@ -580,3 +580,120 @@ export const getRevenueDashboard = async (
     })
   }
 }
+
+export const getMyUpcomingPayment = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
+    const userId = req.user.id;
+
+    const result = await pool.query(
+      `
+      SELECT
+        p.id,
+        p.amount,
+        p.due_date,
+        p.status,
+        p.penalty_amount,
+
+        r.room_number,
+        bed.bed_number
+
+      FROM payments p
+
+      JOIN boarders b
+        ON p.boarder_id = b.id
+
+      JOIN users u
+        ON b.user_id = u.id
+
+      JOIN rooms r
+        ON b.room_id = r.id
+
+      JOIN beds bed
+        ON b.bed_id = bed.id
+
+      WHERE
+        u.id = $1
+        AND p.status IN ('Pending', 'Overdue')
+
+      ORDER BY p.due_date ASC
+
+      LIMIT 1
+      `,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({
+        hasUpcomingPayment: false,
+      });
+    }
+
+    const payment = result.rows[0];
+
+    // Normalize dates
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const dueDate = new Date(payment.due_date);
+    dueDate.setHours(0, 0, 0, 0);
+
+    const daysLeft = Math.ceil(
+      (dueDate.getTime() - today.getTime()) /
+      (1000 * 60 * 60 * 24)
+    );
+
+    let paymentState: "Upcoming" | "Due Today" | "Overdue";
+
+    if (daysLeft < 0) {
+      paymentState = "Overdue";
+    } else if (daysLeft === 0) {
+      paymentState = "Due Today";
+    } else {
+      paymentState = "Upcoming";
+    }
+
+    const amount = Number(payment.amount);
+    const penalty = Number(payment.penalty_amount);
+
+    res.json({
+      hasUpcomingPayment: true,
+
+      payment: {
+        payment_id: payment.id,
+
+        label: "Monthly Rent",
+
+        room: payment.room_number,
+        bed: payment.bed_number,
+
+        amount,
+        penalty,
+        totalAmount: amount + penalty,
+
+        dueDate: payment.due_date,
+
+        daysLeft,
+
+        paymentState,
+
+        status: payment.status,
+      },
+    });
+
+  } catch (error) {
+    console.error("Upcoming payment error:", error);
+
+    res.status(500).json({
+      message: "Server error",
+    });
+  }
+};

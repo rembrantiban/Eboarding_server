@@ -7,7 +7,8 @@ import { getPaymentReport,
         getMyPaidPayments, 
         getReport, 
         getPaymentAnalytics,
-        getRevenueDashboard
+        getRevenueDashboard,
+        getMyUpcomingPayment,
         } from "./payments.controller";
 
 
@@ -29,4 +30,5 @@ router.get("/test-reminders", async (req, res) => {
 });
 router.get("/payment-analytics", checkAuth, getPaymentAnalytics);
 router.get("/revenue-dashboard", checkAuth, getRevenueDashboard);
+router.get("/my-upcoming-payment", checkAuth, getMyUpcomingPayment);
 export default router;
