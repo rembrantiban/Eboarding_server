@@ -404,3 +404,33 @@ export const markAsRead = async (
     });
   }
 };
+
+
+export const markAllAsRead = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    const userId = req.user?.id;
+
+    await pool.query(
+      `
+      UPDATE announcement_notifications
+      SET is_read = TRUE
+      WHERE user_id = $1
+      `,
+      [userId]
+    );
+
+    res.json({
+      message: "All announcements marked as read.",
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      message: "Error marking announcements as read.",
+    });
+  }
+};

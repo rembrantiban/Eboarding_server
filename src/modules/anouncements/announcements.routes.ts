@@ -6,6 +6,7 @@ import {
   getUserAnnouncements,
   getUnreadCount,
   markAsRead,
+  markAllAsRead,
 } from "./anouncements.controller";
 import { checkAuth } from "../../middleware/checkAuth";
 
@@ -21,6 +22,7 @@ router.put("/:id", updateAnnouncement);
 
 // Boarder
 router.get("/", getUserAnnouncements);
+router.put("/read-all",  markAllAsRead);
 
 // Notifications
 router.get("/unread/count", getUnreadCount);
