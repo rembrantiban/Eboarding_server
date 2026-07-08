@@ -303,6 +303,8 @@ export const getUserAnnouncements = async (
           ' ',
           u.last_name
         ) AS created_by_name,
+        
+        u.avatar_url AS created_by_avatar,
 
         a.created_at,
         a.updated_at
