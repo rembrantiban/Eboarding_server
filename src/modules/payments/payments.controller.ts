@@ -736,7 +736,7 @@ export const getMyRecentPayments = async (
 
       ORDER BY p.paid_at DESC
 
-      LIMIT 5
+      LIMIT 3
       `,
       [userId]
     );

@@ -18,7 +18,6 @@ const router = express.Router();
 router.get("/getpayment", getPaymentReport);
 router.put("/mark-as-paid/:payment_id", markPaymentAsPaid);
 router.get("/calendar", getCalendarPayments);
-router.get("/my-paid-payments", checkAuth, getMyPaidPayments);
 router.get("/getreport", checkAuth, getReport);
 router.get("/test-reminders", async (req, res) => {
   try {
@@ -33,4 +32,6 @@ router.get("/payment-analytics", checkAuth, getPaymentAnalytics);
 router.get("/revenue-dashboard", checkAuth, getRevenueDashboard);
 router.get("/my-upcoming-payment", checkAuth, getMyUpcomingPayment);
 router.get("/my-recent-payments", checkAuth, getMyRecentPayments);
+router.get("/my-paid-payments", checkAuth, getMyPaidPayments);
+
 export default router;
