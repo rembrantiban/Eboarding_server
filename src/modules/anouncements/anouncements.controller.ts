@@ -374,6 +374,8 @@ export const markAsRead = async (
   req: AuthRequest,
   res: Response
 ) => {
+    console.log("===== HIT markAllAsRead =====");
+
   try {
     const userId = req.user?.id;
     const { id } = req.params;
