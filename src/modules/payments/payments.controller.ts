@@ -697,3 +697,80 @@ export const getMyUpcomingPayment = async (
     });
   }
 };
+
+
+export const getMyRecentPayments = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
+    const userId = req.user.id;
+
+    const result = await pool.query(
+      `
+      SELECT
+        p.id,
+        p.amount,
+        p.penalty_amount,
+        p.paid_at,
+        p.due_date,
+        p.status
+
+      FROM payments p
+
+      JOIN boarders b
+        ON p.boarder_id = b.id
+
+      JOIN users u
+        ON b.user_id = u.id
+
+      WHERE
+        u.id = $1
+        AND p.status = 'Paid'
+
+      ORDER BY p.paid_at DESC
+
+      LIMIT 5
+      `,
+      [userId]
+    );
+
+    const payments = result.rows.map((payment) => ({
+      payment_id: payment.id,
+
+      month: new Date(payment.due_date).toLocaleDateString("en-US", {
+        month: "long",
+        year: "numeric",
+      }),
+
+      amount: Number(payment.amount),
+
+      penalty: Number(payment.penalty_amount),
+
+      totalAmount:
+        Number(payment.amount) +
+        Number(payment.penalty_amount),
+
+      paidDate: payment.paid_at,
+
+      status: payment.status,
+    }));
+
+    res.json(payments);
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      message: "Server error",
+    });
+
+  }
+};

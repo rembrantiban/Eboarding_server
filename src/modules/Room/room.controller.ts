@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { pool } from "../../config/db";
 import cloudinary from "../../config/cloudinary"
+import { AuthRequest } from "../../types/auth";
 
 
 export const getAllRooms = async (req: Request, res: Response) => {
@@ -584,3 +585,92 @@ export const getOccupancyTrend = async (
     })
   }
 }
+
+
+export const getMyDashboard = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
+    const userId = req.user.id;
+
+    const result = await pool.query(
+      `
+      SELECT
+
+        r.room_number,
+        r.capacity,
+        r.price_per_month,
+
+        bed.bed_number,
+
+        b.created_at AS move_in_date
+
+      FROM boarders b
+
+      JOIN users u
+        ON b.user_id = u.id
+
+      JOIN rooms r
+        ON b.room_id = r.id
+
+      JOIN beds bed
+        ON b.bed_id = bed.id
+
+      WHERE u.id = $1
+
+      LIMIT 1
+      `,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        message: "Boarder not found",
+      });
+    }
+
+    const boarder = result.rows[0];
+
+    const moveInDate = new Date(boarder.move_in_date);
+
+    const today = new Date();
+
+    const months =
+      (today.getFullYear() - moveInDate.getFullYear()) * 12 +
+      (today.getMonth() - moveInDate.getMonth());
+
+    res.json({
+
+      room: {
+        roomNumber: boarder.room_number,
+        bedNumber: boarder.bed_number,
+        capacity: boarder.capacity,
+      },
+
+      monthlyRate: Number(boarder.price_per_month),
+
+      stay: {
+        months,
+        moveInDate,
+      },
+
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      message: "Server error",
+    });
+
+  }
+};

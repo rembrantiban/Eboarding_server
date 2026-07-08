@@ -438,7 +438,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
     );
 
     await resend.emails.send({
-      from: "Eboarding <onboarding@eboarding.site>",
+      from: "Eboarding <noreply@eboarding.site>",
       to: user.email,
       subject: "Your Password Reset Code",
       html: `

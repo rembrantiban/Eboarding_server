@@ -8,8 +8,10 @@ import {
   getAvailableRoomsWithBeds,
   getDashboardStats,
   getOccupancyTrend,
+  getMyDashboard,
 } from "./room.controller";
 import { upload } from "../../lib/upload";
+import { checkAuth } from "../../middleware/checkAuth";
 
 const router = Router();
 
@@ -20,5 +22,6 @@ router.delete("/delete/:id", verifyAdmin, deleteRoom);
 router.get("/available", getAvailableRoomsWithBeds);
 router.get("/dashboard-stats", getDashboardStats);
 router.get("/occupancy-trend", getOccupancyTrend);
+router.get("/my-stats dashboard", checkAuth, getMyDashboard);
 
 export default router;
