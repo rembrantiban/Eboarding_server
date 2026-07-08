@@ -18,7 +18,6 @@ router.use(checkAuth);
 // Admin / Staff
 router.post("/",checkAuth, createAnnouncement);
 router.get("/my-announcements", getMyAnnouncements);
-router.put("/:id", updateAnnouncement);
 
 // Boarder
 router.get("/", getUserAnnouncements);
@@ -27,5 +26,8 @@ router.put("/read-all",  markAllAsRead);
 // Notifications
 router.get("/unread/count", getUnreadCount);
 router.put("/read/:id", markAsRead);
+
+
+router.put("/:id", updateAnnouncement);
 
 export default router;
