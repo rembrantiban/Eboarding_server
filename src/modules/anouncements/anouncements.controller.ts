@@ -145,6 +145,8 @@ export const getMyAnnouncements = async (
           ' ',
           u.last_name
         ) AS created_by_name,
+        
+        u.avatar_url AS created_by_avatar,
 
         a.created_at,
         a.updated_at
@@ -413,9 +415,18 @@ export const markAllAsRead = async (
   res: Response
 ) => {
   try {
+    console.log("markAllAsRead called");
+    console.log("req.user:", req.user);
+
     const userId = req.user?.id;
 
-    await pool.query(
+    if (!userId) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
+    const result = await pool.query(
       `
       UPDATE announcement_notifications
       SET is_read = TRUE
@@ -424,15 +435,18 @@ export const markAllAsRead = async (
       [userId]
     );
 
-    res.json({
+    console.log(result);
+
+    return res.json({
       message: "All announcements marked as read.",
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("markAllAsRead error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       message: "Error marking announcements as read.",
+      error: error instanceof Error ? error.message : error,
     });
   }
 };
