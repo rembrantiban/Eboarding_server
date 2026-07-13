@@ -1204,3 +1204,76 @@ export const activateUserAccount = async (
     });
   }
 };
+
+
+export const updateUserStatus = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const allowedStatus = [
+      "Pending",
+      "Approved",
+      "Rejected",
+    ];
+
+    if (!allowedStatus.includes(status)) {
+      return res.status(400).json({
+        message: "Invalid status.",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE users
+      SET
+        status = $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING
+        id,
+        user_id_no,
+        first_name,
+        last_name,
+        email,
+        username,
+        contact_number,
+        address,
+        avatar_url,
+        gender,
+        age,
+        valid_id_image,
+        emergency_contact_name,
+        emergency_contact_number,
+        emergency_contact_relationship,
+        user_type,
+        status,
+        account_status,
+        created_at,
+        updated_at
+      `,
+      [status, id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        message: "User not found.",
+      });
+    }
+
+    return res.status(200).json({
+      message: `User ${status.toLowerCase()} successfully.`,
+      user: result.rows[0],
+    });
+
+  } catch (error) {
+    console.error("Update user status:", error);
+
+    return res.status(500).json({
+      message: "Server error.",
+    });
+  }
+};
