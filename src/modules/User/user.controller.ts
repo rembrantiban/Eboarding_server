@@ -387,6 +387,170 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
   }
 };
 
+
+export const createUserByStaff = async (req: Request, res: Response) => {
+  try {
+    const {
+      first_name,
+      last_name,
+      email,
+      username,
+      contact_number,
+      address,
+      password,
+      user_type,
+      gender,
+      age,
+      emergency_contact_name,
+      emergency_contact_number,
+      emergency_contact_relationship,
+    } = req.body;
+
+    const allowedRoles = ["Staff", "Boarder"];
+
+    if (!allowedRoles.includes(user_type)) {
+      return res.status(400).json({
+        message: "Invalid user type",
+      });
+    }
+
+    const existingUser = await pool.query(
+      "SELECT * FROM users WHERE email = $1 OR username = $2",
+      [email, username]
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({
+        message: "Email or username already exists",
+      });
+    }
+
+    const files = req.files as
+      | {
+          [fieldname: string]: Express.Multer.File[];
+        }
+      | undefined;
+
+    let avatarUrl: string | null = null;
+    let validIdImage: string | null = null;
+
+    // Upload Avatar
+    if (files?.avatar?.[0]) {
+      const uploadResult = await new Promise<UploadApiResponse>(
+        (resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: "avatars" },
+            (error, result) => {
+              if (error || !result) return reject(error);
+              resolve(result);
+            }
+          );
+
+          stream.end(files.avatar[0].buffer);
+        }
+      );
+
+      avatarUrl = uploadResult.secure_url;
+    }
+
+    // Upload Valid ID
+    if (files?.valid_id_image?.[0]) {
+      const uploadResult = await new Promise<UploadApiResponse>(
+        (resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: "valid_ids" },
+            (error, result) => {
+              if (error || !result) return reject(error);
+              resolve(result);
+            }
+          );
+
+          stream.end(files.valid_id_image[0].buffer);
+        }
+      );
+
+      validIdImage = uploadResult.secure_url;
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const result = await pool.query(
+      `
+      INSERT INTO users
+      (
+        first_name,
+        last_name,
+        email,
+        username,
+        contact_number,
+        address,
+        password,
+        avatar_url,
+        gender,
+        age,
+        valid_id_image,
+        emergency_contact_name,
+        emergency_contact_number,
+        emergency_contact_relationship,
+        user_type,
+        status
+      )
+      VALUES
+      (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'Approved'
+      )
+
+      RETURNING
+        id,
+        user_id_no,
+        first_name,
+        last_name,
+        email,
+        username,
+        contact_number,
+        address,
+        avatar_url,
+        gender,
+        age,
+        valid_id_image,
+        emergency_contact_name,
+        emergency_contact_number,
+        emergency_contact_relationship,
+        user_type,
+        status
+      `,
+      [
+        first_name,
+        last_name,
+        email,
+        username,
+        contact_number,
+        address,
+        hashedPassword,
+        avatarUrl,
+        gender,
+        age || null,
+        validIdImage,
+        emergency_contact_name,
+        emergency_contact_number,
+        emergency_contact_relationship,
+        user_type,
+      ]
+    );
+
+    return res.status(201).json({
+      message: "User created successfully",
+      user: result.rows[0],
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
+
 export const getAllUsers = async (
   req: AuthRequest,
   res: Response

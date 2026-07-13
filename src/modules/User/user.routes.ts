@@ -12,6 +12,7 @@ import {
         updateProfile,
         countTotalBoarders,
         updateProfileSettings,
+        createUserByStaff,
        } from './user.controller'
 import { verifyAdmin } from "../../middleware/authMiddleware"
 import { checkAuth } from "../../middleware/checkAuth"
@@ -24,6 +25,7 @@ router.post( "/register", upload.fields([{ name: "avatar", maxCount: 1 },{ name:
 )       ;
 router.post("/login", login);
 router.post("/admin/users",upload.fields([{ name: "avatar", maxCount: 1 },{ name: "valid_id_image", maxCount: 1 }, ]), verifyAdmin, createUserByAdmin);
+router.post("/staff/users",upload.fields([{ name: "avatar", maxCount: 1 },{ name: "valid_id_image", maxCount: 1 }, ]), verifyAdmin, createUserByStaff);
 router.get("/users", checkAuth, getAllUsers);
 router.delete("/deleteUser/:id", deleteUserAccount);
 router.post("/forgot-password", forgotPassword);
