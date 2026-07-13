@@ -27,7 +27,7 @@ export const register = async (req: Request, res: Response) => {
       `INSERT INTO users 
       (first_name, last_name, email, username, contact_number, address, password, user_type)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING id, first_name, last_name, address, email, username, user_type`,
+      RETURNING id, first_name, last_name, address, email, username, user_type, status`,
       [first_name, last_name, email, username, contact_number, address, hashedPassword, user_type]
     );
 
@@ -63,6 +63,18 @@ export const login = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
+    if (user.status === "Pending") {
+      return res.status(403).json({
+        message: "Your account is waiting for approval.",
+      });
+    }
+
+    if (user.status === "Rejected") {
+      return res.status(403).json({
+        message: "Your account has been rejected.",
+      });
+    }
+
     const token = jwt.sign(
       { id: user.id, user_type: user.user_type },
       process.env.JWT_SECRET as string,
@@ -91,14 +103,25 @@ export const login = async (req: Request, res: Response) => {
   }
 };
 
-
 export const createUserByAdmin = async (req: Request, res: Response) => {
   try {
-    const { first_name, last_name, email, username, contact_number, address, password, user_type } = req.body;
+    const {
+      first_name,
+      last_name,
+      email,
+      username,
+      contact_number,
+      address,
+      password,
+      user_type,
+    } = req.body;
 
     const allowedRoles = ["Admin", "Staff", "Boarder"];
+
     if (!allowedRoles.includes(user_type)) {
-      return res.status(400).json({ message: "Invalid user type" });
+      return res.status(400).json({
+        message: "Invalid user type",
+      });
     }
 
     const existingUser = await pool.query(
@@ -107,17 +130,76 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
     );
 
     if (existingUser.rows.length > 0) {
-      return res.status(400).json({ message: "Email or username already exists" });
+      return res.status(400).json({
+        message: "Email or username already exists",
+      });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Upload avatar if provided
+    let avatarUrl: string | null = null;
+
+    if (req.file) {
+      const uploadResult = await new Promise<UploadApiResponse>(
+        (resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: "avatars" },
+            (error, result) => {
+              if (error || !result) return reject(error);
+              resolve(result);
+            }
+          );
+
+          stream.end(req.file!.buffer);
+        }
+      );
+
+      avatarUrl = uploadResult.secure_url;
+    }
+
     const result = await pool.query(
-      `INSERT INTO users 
-      (first_name, last_name, email, username, contact_number, address, password, user_type)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING id, first_name, last_name, email, username, user_type`,
-      [first_name, last_name, email, username, contact_number, address, hashedPassword, user_type]
+      `
+      INSERT INTO users
+      (
+        first_name,
+        last_name,
+        email,
+        username,
+        contact_number,
+        address,
+        password,
+        avatar_url,
+        user_type,
+        status
+      )
+      VALUES
+      (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,'Approved'
+      )
+
+      RETURNING
+        id,
+        user_id_no,
+        first_name,
+        last_name,
+        email,
+        username,
+        avatar_url,
+        user_type,
+        status
+      `,
+      [
+        first_name,
+        last_name,
+        email,
+        username,
+        contact_number,
+        address,
+        hashedPassword,
+        avatarUrl,
+        user_type,
+      ]
     );
 
     res.status(201).json({
@@ -127,7 +209,10 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
 
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Server error" });
+
+    res.status(500).json({
+      message: "Server error",
+    });
   }
 };
 
@@ -161,8 +246,9 @@ export const getAllUsers = async (
     }
 
     const query = `
-      SELECT 
+      SELECT
         u.id,
+        u.user_id_no,
         u.first_name,
         u.last_name,
         u.email,
@@ -171,31 +257,31 @@ export const getAllUsers = async (
         u.address,
         u.avatar_url,
         u.user_type,
+        u.status,
         u.created_at,
         u.updated_at,
 
-        (b.id IS NOT NULL)
-          AS is_assigned,
+        (b.id IS NOT NULL) AS is_assigned,
 
         r.room_number,
         bed.bed_number
 
       FROM users u
 
-      LEFT JOIN boarders b 
-        ON b.user_id = u.id 
+      LEFT JOIN boarders b
+        ON b.user_id = u.id
         AND b.status = 'Active'
 
-      LEFT JOIN rooms r 
+      LEFT JOIN rooms r
         ON b.room_id = r.id
 
-      LEFT JOIN beds bed 
+      LEFT JOIN beds bed
         ON b.bed_id = bed.id
 
       WHERE ${userFilter}
-      ORDER BY u.created_at DESC
 
-    `;
+      ORDER BY u.created_at DESC
+    `;;
     const result =
       await pool.query(query);
     return res.json({
@@ -546,7 +632,7 @@ export const resetPassword = async (req: Request, res: Response) => {
   }
 };
 
-export const checkAuthenticated =  async (req: AuthRequest, res: Response) => {
+export const checkAuthenticated = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -564,18 +650,17 @@ export const checkAuthenticated =  async (req: AuthRequest, res: Response) => {
 
 
 export const countTotalBoarders = async (req: Request, res: Response) => {
-   try{
-        const total = await pool.query("SELECT COUNT(*) FROM users WHERE user_type='Boarder'");
-        res.json({ total: total.rows[0].count });
-   }
+  try {
+    const total = await pool.query("SELECT COUNT(*) FROM users WHERE user_type='Boarder'");
+    res.json({ total: total.rows[0].count });
+  }
   catch (error: any) {
-  console.log(error);
-  res.status(500).json({ message: error.message,});
-}
+    console.log(error);
+    res.status(500).json({ message: error.message, });
+  }
 }
 
-export const updateProfileSettings =
-  async (req: AuthRequest, res: Response) => {
+export const updateProfileSettings = async (req: AuthRequest, res: Response) => {
     try {
       const userId = req.user?.id;
 

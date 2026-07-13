@@ -21,7 +21,7 @@ const router = express.Router();
 
 router.post("/register", register);
 router.post("/login", login);
-router.post("/admin/users", verifyAdmin, createUserByAdmin);
+router.post("/admin/users", checkAuth,upload.single("avatar"), verifyAdmin, createUserByAdmin);
 router.get("/users", checkAuth, getAllUsers);
 router.delete("/deleteUser/:id", deleteUserAccount);
 router.post("/forgot-password", forgotPassword);
