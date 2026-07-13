@@ -598,6 +598,7 @@ export const getAllUsers = async (
 
         u.user_type,
         u.status,
+        u.account_status,
 
         u.created_at,
         u.updated_at,
