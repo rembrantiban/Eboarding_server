@@ -190,6 +190,12 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
+    if (user.account_status === "Deactivate") {
+      return res.status(403).json({
+        message: "Your account has been deactivated. Please contact the administrator.",
+      });
+    }
+
     if (user.status === "Rejected") {
       return res.status(403).json({
         message: "Your account has been rejected.",
