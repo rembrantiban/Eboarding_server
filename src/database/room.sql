@@ -1,18 +1,37 @@
 CREATE TABLE rooms (
-  id SERIAL PRIMARY KEY,
-  room_number VARCHAR(50) UNIQUE NOT NULL,
-  capacity INTEGER NOT NULL CHECK (capacity > 0),
-  price_per_month DECIMAL(10,2) NOT NULL CHECK (price_per_month >= 0),
-  status VARCHAR(20) NOT NULL DEFAULT 'Available' CHECK (status IN ('Available', 'Occupied')),
-  description TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    id SERIAL PRIMARY KEY,
+
+    room_number VARCHAR(50) UNIQUE NOT NULL,
+
+    capacity INTEGER NOT NULL
+        CHECK (capacity > 0),
+
+    price_per_month DECIMAL(10,2) NOT NULL
+        CHECK (price_per_month >= 0),
+
+    status VARCHAR(20) NOT NULL
+        DEFAULT 'Available'
+        CHECK (
+            status IN (
+                'Available',
+                'Occupied',
+                'Under Maintenance'
+            )
+        ),
+
+    description TEXT,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Index for faster queries
-CREATE INDEX idx_rooms_status ON rooms(status);
-CREATE INDEX idx_rooms_price ON rooms(price_per_month);
+CREATE INDEX idx_rooms_status
+ON rooms(status);
 
+CREATE INDEX idx_rooms_price
+ON rooms(price_per_month);
 -- Trigger for updated_at
 CREATE OR REPLACE FUNCTION update_rooms_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -26,7 +45,6 @@ CREATE TRIGGER update_rooms_updated_at
 BEFORE UPDATE ON rooms
 FOR EACH ROW
 EXECUTE FUNCTION update_rooms_updated_at_column();
-
 
 {/* Implement automatic updates when assigning/removing boarders.*/}  
 
