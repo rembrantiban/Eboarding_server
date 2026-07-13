@@ -40,6 +40,11 @@ CREATE TABLE users (
     DEFAULT 'Pending'
     CHECK (status IN ('Pending', 'Approved', 'Rejected')),
 
+  account_status VARCHAR(20)
+  NOT NULL
+  DEFAULT 'Active'
+  CHECK (account_status IN ('Active', 'Deactivate')),
+  
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
