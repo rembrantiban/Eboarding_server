@@ -540,6 +540,7 @@ export const updateRoomStatus = async (
     });
   }
 };
+
 export const deleteRoom = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
