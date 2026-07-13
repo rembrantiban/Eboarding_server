@@ -19,7 +19,9 @@ import { upload } from "../../lib/upload"
 
 const router = express.Router();
 
-router.post("/register", register);
+router.post( "/register", upload.fields([{ name: "avatar", maxCount: 1 },{ name: "valid_id_image", maxCount: 1 }, ]),
+  register
+)       ;
 router.post("/login", login);
 router.post("/admin/users", checkAuth,upload.single("avatar"), verifyAdmin, createUserByAdmin);
 router.get("/users", checkAuth, getAllUsers);

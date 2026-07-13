@@ -2,6 +2,7 @@ CREATE TABLE users (
   id SERIAL PRIMARY KEY,
 
   user_id_no VARCHAR(8) UNIQUE NOT NULL,
+
   first_name VARCHAR(100) NOT NULL,
   last_name VARCHAR(100) NOT NULL,
 
@@ -14,6 +15,19 @@ CREATE TABLE users (
   password TEXT NOT NULL,
 
   avatar_url TEXT,
+
+  gender VARCHAR(20)
+    CHECK (gender IN ('Male', 'Female')),
+
+  age INT
+    CHECK (age >= 0),
+
+  valid_id_image TEXT,
+
+  -- Emergency Contact
+  emergency_contact_name VARCHAR(100),
+  emergency_contact_number VARCHAR(20),
+  emergency_contact_relationship VARCHAR(50),
 
   is_assigned BOOLEAN DEFAULT FALSE,
 

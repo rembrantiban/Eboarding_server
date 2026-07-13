@@ -10,7 +10,21 @@ import { AuthRequest } from "../../types/auth";
 
 export const register = async (req: Request, res: Response) => {
   try {
-    const { first_name, last_name, email, username, contact_number, address, password, user_type } = req.body;
+    const {
+      first_name,
+      last_name,
+      email,
+      username,
+      contact_number,
+      address,
+      password,
+      user_type,
+      gender,
+      age,
+      emergency_contact_name,
+      emergency_contact_number,
+      emergency_contact_relationship,
+    } = req.body;
 
     const existingUser = await pool.query(
       "SELECT * FROM users WHERE email = $1 OR username = $2",
@@ -18,27 +32,134 @@ export const register = async (req: Request, res: Response) => {
     );
 
     if (existingUser.rows.length > 0) {
-      return res.status(400).json({ message: "User already exists" });
+      return res.status(400).json({
+        message: "User already exists",
+      });
+    }
+
+    // ✅ Type-safe access to upload.fields()
+    const files = req.files as unknown as {
+      avatar?: Express.Multer.File[];
+      valid_id_image?: Express.Multer.File[];
+    };
+
+    let avatarUrl: string | null = null;
+    let validIdImage: string | null = null;
+
+    // Upload Avatar
+    if (files.avatar?.length) {
+      const uploadResult = await new Promise<UploadApiResponse>(
+        (resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: "avatars" },
+            (error, result) => {
+              if (error || !result) return reject(error);
+              resolve(result);
+            }
+          );
+
+          stream.end(files.avatar?.[0]?.buffer);
+        }
+      );
+
+      avatarUrl = uploadResult.secure_url;
+    }
+
+    // Upload Valid ID
+    if (files.valid_id_image?.length) {
+      const uploadResult = await new Promise<UploadApiResponse>(
+        (resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: "valid_ids" },
+            (error, result) => {
+              if (error || !result) return reject(error);
+              resolve(result);
+            }
+          );
+
+          stream.end(files.valid_id_image?.[0]?.buffer);
+        }
+      );
+
+      validIdImage = uploadResult.secure_url;
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const result = await pool.query(
-      `INSERT INTO users 
-      (first_name, last_name, email, username, contact_number, address, password, user_type)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING id, first_name, last_name, address, email, username, user_type, status`,
-      [first_name, last_name, email, username, contact_number, address, hashedPassword, user_type]
+      `
+      INSERT INTO users
+      (
+        first_name,
+        last_name,
+        email,
+        username,
+        contact_number,
+        address,
+        password,
+        avatar_url,
+        gender,
+        age,
+        valid_id_image,
+        emergency_contact_name,
+        emergency_contact_number,
+        emergency_contact_relationship,
+        user_type
+      )
+      VALUES
+      (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15
+      )
+      RETURNING
+        id,
+        user_id_no,
+        first_name,
+        last_name,
+        email,
+        username,
+        contact_number,
+        address,
+        avatar_url,
+        gender,
+        age,
+        valid_id_image,
+        emergency_contact_name,
+        emergency_contact_number,
+        emergency_contact_relationship,
+        user_type,
+        status,
+        created_at
+      `,
+      [
+        first_name,
+        last_name,
+        email,
+        username,
+        contact_number,
+        address,
+        hashedPassword,
+        avatarUrl,
+        gender || null,
+        age ? Number(age) : null,
+        validIdImage,
+        emergency_contact_name || null,
+        emergency_contact_number || null,
+        emergency_contact_relationship || null,
+        user_type,
+      ]
     );
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "User registered successfully",
       user: result.rows[0],
     });
 
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
+    console.error("Register Error:", error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
   }
 };
 
@@ -216,32 +337,22 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
   }
 };
 
-
 export const getAllUsers = async (
   req: AuthRequest,
   res: Response
 ) => {
-
   try {
-    const currentUserType =
-      req.user?.user_type;
+    const currentUserType = req.user?.user_type;
 
     let userFilter = "";
-    if (
-      currentUserType === "Admin"
-    ) {
-      userFilter =
-        `u.user_type != 'Admin'`;
-    }
-    else if (
-      currentUserType === "Staff"
-    ) {
-      userFilter =
-        `u.user_type = 'Boarder'`;
-    }
-    else {
+
+    if (currentUserType === "Admin") {
+      userFilter = `u.user_type != 'Admin'`;
+    } else if (currentUserType === "Staff") {
+      userFilter = `u.user_type = 'Boarder'`;
+    } else {
       return res.status(403).json({
-        message: "Access denied"
+        message: "Access denied",
       });
     }
 
@@ -256,8 +367,18 @@ export const getAllUsers = async (
         u.contact_number,
         u.address,
         u.avatar_url,
+
+        u.gender,
+        u.age,
+        u.valid_id_image,
+
+        u.emergency_contact_name,
+        u.emergency_contact_number,
+        u.emergency_contact_relationship,
+
         u.user_type,
         u.status,
+
         u.created_at,
         u.updated_at,
 
@@ -281,23 +402,21 @@ export const getAllUsers = async (
       WHERE ${userFilter}
 
       ORDER BY u.created_at DESC
-    `;;
-    const result =
-      await pool.query(query);
+    `;
+
+    const result = await pool.query(query);
+
     return res.json({
       users: result.rows,
-      total:
-        result.rows.length,
-    });
-  } catch (error) {
-    console.error(
-      "Get users error:",
-      error
-    );
-    return res.status(500).json({
-      message: "Server error"
+      total: result.rows.length,
     });
 
+  } catch (error) {
+    console.error("Get users error:", error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
   }
 };
 
