@@ -23,7 +23,7 @@ router.post( "/register", upload.fields([{ name: "avatar", maxCount: 1 },{ name:
   register
 )       ;
 router.post("/login", login);
-router.post("/admin/users", checkAuth,upload.single("avatar"), verifyAdmin, createUserByAdmin);
+router.post("/admin/users",upload.fields([{ name: "avatar", maxCount: 1 },{ name: "valid_id_image", maxCount: 1 }, ]), verifyAdmin, createUserByAdmin);
 router.get("/users", checkAuth, getAllUsers);
 router.delete("/deleteUser/:id", deleteUserAccount);
 router.post("/forgot-password", forgotPassword);

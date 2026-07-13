@@ -235,6 +235,11 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
       address,
       password,
       user_type,
+      gender,
+      age,
+      emergency_contact_name,
+      emergency_contact_number,
+      emergency_contact_relationship,
     } = req.body;
 
     const allowedRoles = ["Admin", "Staff", "Boarder"];
@@ -256,12 +261,17 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
       });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const files = req.files as
+      | {
+          [fieldname: string]: Express.Multer.File[];
+        }
+      | undefined;
 
-    // Upload avatar if provided
     let avatarUrl: string | null = null;
+    let validIdImage: string | null = null;
 
-    if (req.file) {
+    // Upload Avatar
+    if (files?.avatar?.[0]) {
       const uploadResult = await new Promise<UploadApiResponse>(
         (resolve, reject) => {
           const stream = cloudinary.uploader.upload_stream(
@@ -272,12 +282,33 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
             }
           );
 
-          stream.end(req.file!.buffer);
+          stream.end(files.avatar[0].buffer);
         }
       );
 
       avatarUrl = uploadResult.secure_url;
     }
+
+    // Upload Valid ID
+    if (files?.valid_id_image?.[0]) {
+      const uploadResult = await new Promise<UploadApiResponse>(
+        (resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: "valid_ids" },
+            (error, result) => {
+              if (error || !result) return reject(error);
+              resolve(result);
+            }
+          );
+
+          stream.end(files.valid_id_image[0].buffer);
+        }
+      );
+
+      validIdImage = uploadResult.secure_url;
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const result = await pool.query(
       `
@@ -291,12 +322,18 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
         address,
         password,
         avatar_url,
+        gender,
+        age,
+        valid_id_image,
+        emergency_contact_name,
+        emergency_contact_number,
+        emergency_contact_relationship,
         user_type,
         status
       )
       VALUES
       (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,'Approved'
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'Approved'
       )
 
       RETURNING
@@ -306,7 +343,15 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
         last_name,
         email,
         username,
+        contact_number,
+        address,
         avatar_url,
+        gender,
+        age,
+        valid_id_image,
+        emergency_contact_name,
+        emergency_contact_number,
+        emergency_contact_relationship,
         user_type,
         status
       `,
@@ -319,19 +364,24 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
         address,
         hashedPassword,
         avatarUrl,
+        gender,
+        age || null,
+        validIdImage,
+        emergency_contact_name,
+        emergency_contact_number,
+        emergency_contact_relationship,
         user_type,
       ]
     );
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "User created successfully",
       user: result.rows[0],
     });
-
   } catch (error) {
     console.error(error);
 
-    res.status(500).json({
+    return res.status(500).json({
       message: "Server error",
     });
   }
