@@ -68,6 +68,89 @@ export const getAllRooms = async (req: Request, res: Response) => {
   }
 };
 
+export const getAvailableRooms = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        r.id,
+        r.room_number,
+        r.capacity,
+        r.price_per_month,
+        r.description,
+
+        COALESCE(images.images, '[]') AS images,
+
+        COALESCE(beds.available_beds, '[]') AS beds,
+
+        COALESCE(
+          json_array_length(beds.available_beds),
+          0
+        ) AS available_beds
+
+      FROM rooms r
+
+      LEFT JOIN (
+
+        SELECT
+          room_id,
+          json_agg(image_url) AS images
+
+        FROM room_images
+
+        GROUP BY room_id
+
+      ) images
+      ON images.room_id = r.id
+
+      LEFT JOIN (
+
+        SELECT
+
+          b.room_id,
+
+          json_agg(
+            json_build_object(
+              'id', b.id,
+              'bed_number', b.bed_number
+            )
+          ) FILTER (
+            WHERE ra.id IS NULL
+          ) AS available_beds
+
+        FROM beds b
+
+        LEFT JOIN room_assignments ra
+          ON ra.bed_id = b.id
+          AND ra.status = 'Active'
+
+        GROUP BY b.room_id
+
+      ) beds
+      ON beds.room_id = r.id
+
+      WHERE
+        r.status = 'Available'
+
+      ORDER BY
+        r.room_number;
+    `);
+
+    res.json(result.rows);
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      message: "Server error",
+    });
+
+  }
+};
+
 export const createRoom = async (req: Request, res: Response) => {
   const client = await pool.connect();
 

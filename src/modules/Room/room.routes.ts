@@ -9,6 +9,7 @@ import {
   getDashboardStats,
   getOccupancyTrend,
   getMyDashboard,
+  getAvailableRooms,
 } from "./room.controller";
 import { upload } from "../../lib/upload";
 import { checkAuth } from "../../middleware/checkAuth";
@@ -23,5 +24,6 @@ router.get("/available", getAvailableRoomsWithBeds);
 router.get("/dashboard-stats", getDashboardStats);
 router.get("/occupancy-trend", getOccupancyTrend);
 router.get("/my-stats-dashboard", checkAuth, getMyDashboard);
+router.get("/available-rooms", checkAuth, getAvailableRooms);
 
 export default router;
