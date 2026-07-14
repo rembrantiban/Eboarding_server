@@ -641,6 +641,53 @@ export const getAllUsers = async (
   }
 };
 
+export const getAvailableBoarders = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        u.id,
+        u.user_id_no,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.contact_number,
+        u.avatar_url,
+        u.gender,
+        u.age
+
+      FROM users u
+
+      WHERE
+        u.user_type = 'Boarder'
+        AND u.status = 'Approved'
+        AND u.account_status = 'Active'
+
+        AND NOT EXISTS (
+          SELECT 1
+          FROM room_assignments ra
+          WHERE ra.user_id = u.id
+          AND ra.status = 'Active'
+        )
+
+      ORDER BY
+        u.first_name,
+        u.last_name;
+    `);
+
+    return res.status(200).json(result.rows);
+
+  } catch (error) {
+    console.error("Get available boarders error:", error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
+
 export const deleteUserAccount = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;

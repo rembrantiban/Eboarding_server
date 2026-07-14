@@ -16,6 +16,7 @@ import {
         deactivateUserAccount,
         activateUserAccount,
         updateUserStatus,
+        getAvailableBoarders,
        } from './user.controller'
 import { verifyAdmin } from "../../middleware/authMiddleware"
 import { checkAuth } from "../../middleware/checkAuth"
@@ -41,5 +42,6 @@ router.put("/profile-settings", checkAuth, upload.single("avatar"), updateProfil
 router.put("/deactivate-user/:id", checkAuth, deactivateUserAccount);
 router.put("/activate-user/:id", checkAuth, activateUserAccount);
 router.put("/update-user-status/:id", checkAuth, verifyAdmin, updateUserStatus);
+router.get("/available-boarders", checkAuth, getAvailableBoarders);
 
 export default router   
