@@ -9,4 +9,5 @@ CREATE TABLE beds (
 
 {/* Implement automatic updates when assigning/removing boarders.*/}  
 TRUNCATE TABLE payments, boarders RESTART IDENTITY CASCADE;
+
 UPDATE beds SET status = 'Available';

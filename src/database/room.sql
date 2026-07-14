@@ -26,20 +26,21 @@ CREATE TABLE rooms (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Index for faster queries
+-- Indexes
 CREATE INDEX idx_rooms_status
 ON rooms(status);
 
 CREATE INDEX idx_rooms_price
 ON rooms(price_per_month);
--- Trigger for updated_at
+
+-- Auto update updated_at
 CREATE OR REPLACE FUNCTION update_rooms_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
-  NEW.updated_at = CURRENT_TIMESTAMP;
-  RETURN NEW;
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
 END;
-$$ language 'plpgsql';
+$$ LANGUAGE plpgsql;
 
 CREATE TRIGGER update_rooms_updated_at
 BEFORE UPDATE ON rooms
