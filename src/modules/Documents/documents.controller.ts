@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import { pool } from "../../config/db";
+import { UploadApiResponse } from "cloudinary";
+import  cloudinary  from "../../config/cloudinary";
 
 export const getAllDocuments = async (
   req: Request,
@@ -208,6 +210,94 @@ export const rejectUserDocument = async (
 
     return res.status(500).json({
       message: "Server error."
+    });
+  }
+};
+
+
+export const uploadDocument = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const userId = (req as any).user.id;
+
+    const { valid_id_type } = req.body;
+
+    const files = req.files as
+      | {
+          [fieldname: string]: Express.Multer.File[];
+        }
+      | undefined;
+
+    if (!files?.valid_id_image?.[0]) {
+      return res.status(400).json({
+        message: "Valid ID image is required.",
+      });
+    }
+
+    const uploadResult = await new Promise<UploadApiResponse>(
+      (resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            folder: "valid_ids",
+          },
+          (error, result) => {
+            if (error || !result) return reject(error);
+            resolve(result);
+          }
+        );
+
+        stream.end(files.valid_id_image[0].buffer);
+      }
+    );
+
+    const result = await pool.query(
+      `
+      UPDATE users
+      SET
+          valid_id_type = $1,
+          valid_id_image = $2,
+          valid_id_status = 'Under Review',
+          valid_id_rejection_reason = NULL,
+          valid_id_verified_by = NULL
+      WHERE
+          id = $3
+      AND user_type = 'Boarder'
+
+      RETURNING
+          id,
+          user_id_no,
+          first_name,
+          last_name,
+          valid_id_type,
+          valid_id_image,
+          valid_id_status,
+          created_at,
+          updated_at;
+      `,
+      [
+        valid_id_type,
+        uploadResult.secure_url,
+        userId,
+      ]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        message: "Boarder not found.",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Document uploaded successfully.",
+      document: result.rows[0],
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Server error.",
     });
   }
 };
