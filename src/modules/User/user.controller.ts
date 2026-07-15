@@ -21,6 +21,7 @@ export const register = async (req: Request, res: Response) => {
       user_type,
       gender,
       age,
+      valid_id_type,
       emergency_contact_name,
       emergency_contact_number,
       emergency_contact_relationship,
@@ -100,6 +101,7 @@ export const register = async (req: Request, res: Response) => {
         avatar_url,
         gender,
         age,
+        valid_id_type,
         valid_id_image,
         emergency_contact_name,
         emergency_contact_number,
@@ -108,7 +110,7 @@ export const register = async (req: Request, res: Response) => {
       )
       VALUES
       (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16
       )
       RETURNING
         id,
@@ -122,6 +124,8 @@ export const register = async (req: Request, res: Response) => {
         avatar_url,
         gender,
         age,
+        valid_id_type,
+        validIdImage,
         valid_id_image,
         emergency_contact_name,
         emergency_contact_number,
@@ -141,6 +145,7 @@ export const register = async (req: Request, res: Response) => {
         avatarUrl,
         gender || null,
         age ? Number(age) : null,
+        valid_id_type,
         validIdImage,
         emergency_contact_name || null,
         emergency_contact_number || null,
@@ -220,7 +225,13 @@ export const login = async (req: Request, res: Response) => {
         user_type: user.user_type,
         address: user.address,
         contact_number: user.contact_number,
-        avatar_url: user.avatar_url
+        avatar_url: user.avatar_url,
+        valid_id_type: user.valid_id_type,
+        valid_id_image: user.valid_id_image,
+        emergency_contact_name: user.emergency_contact_name,
+        emergency_contact_number: user.emergency_contact_number,
+        emergency_contact_relationship: user.emergency_contact_relationship,
+
       },
     });
 
@@ -243,6 +254,7 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
       user_type,
       gender,
       age,
+      valid_id_type,
       emergency_contact_name,
       emergency_contact_number,
       emergency_contact_relationship,
@@ -330,6 +342,7 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
         avatar_url,
         gender,
         age,
+        valid_id_type,
         valid_id_image,
         emergency_contact_name,
         emergency_contact_number,
@@ -339,7 +352,7 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
       )
       VALUES
       (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'Approved'
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'Approved'
       )
 
       RETURNING
@@ -354,6 +367,7 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
         avatar_url,
         gender,
         age,
+        valid_id_type,
         valid_id_image,
         emergency_contact_name,
         emergency_contact_number,
@@ -372,6 +386,7 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
         avatarUrl,
         gender,
         age || null,
+        valid_id_type,
         validIdImage,
         emergency_contact_name,
         emergency_contact_number,
@@ -407,6 +422,7 @@ export const createUserByStaff = async (req: Request, res: Response) => {
       user_type,
       gender,
       age,
+      valid_id_type,
       emergency_contact_name,
       emergency_contact_number,
       emergency_contact_relationship,
@@ -495,6 +511,7 @@ export const createUserByStaff = async (req: Request, res: Response) => {
         gender,
         age,
         valid_id_image,
+        valid_id_type,
         emergency_contact_name,
         emergency_contact_number,
         emergency_contact_relationship,
@@ -503,7 +520,7 @@ export const createUserByStaff = async (req: Request, res: Response) => {
       )
       VALUES
       (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'Approved'
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'Approved'
       )
 
       RETURNING
@@ -518,6 +535,7 @@ export const createUserByStaff = async (req: Request, res: Response) => {
         avatar_url,
         gender,
         age,
+        valid_id_type,
         valid_id_image,
         emergency_contact_name,
         emergency_contact_number,
@@ -536,6 +554,7 @@ export const createUserByStaff = async (req: Request, res: Response) => {
         avatarUrl,
         gender,
         age || null,
+        valid_id_type,
         validIdImage,
         emergency_contact_name,
         emergency_contact_number,

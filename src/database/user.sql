@@ -21,7 +21,8 @@ CREATE TABLE users (
 
   age INT
     CHECK (age >= 0),
-
+    
+  valid_id_type VARCHAR(50),
   valid_id_image TEXT,
 
   -- Emergency Contact
