@@ -12,3 +12,5 @@ router.get("/get-all", checkAuth, getAllDocuments);
 router.get("/get-my-document", checkAuth, getUserSubmittedDocument);
 router.put("/approve/:id", checkAuth, approveUserDocument);
 router.put("/reject/:id", checkAuth, rejectUserDocument);
+
+export default router
