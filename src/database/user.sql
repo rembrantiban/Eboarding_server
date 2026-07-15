@@ -1,3 +1,4 @@
+
 CREATE TABLE users (
   id SERIAL PRIMARY KEY,
 
@@ -24,9 +25,21 @@ CREATE TABLE users (
     
   valid_id_type VARCHAR(50),
   valid_id_image TEXT,
+  valid_id_status VARCHAR(20)
+  DEFAULT 'Under Review'
+  CHECK (
+      valid_id_status IN (
+          'Under Review',
+          'Approved',
+          'Rejected'
+      )
+  ),
 
-  -- Emergency Contact
-  emergency_contact_name VARCHAR(100),
+valid_id_rejection_reason TEXT,
+valid_id_verified_by INT, 
+
+-- Emergency Contact
+emergency_contact_name VARCHAR(100),
   emergency_contact_number VARCHAR(20),
   emergency_contact_relationship VARCHAR(50),
 
@@ -83,7 +96,6 @@ BEGIN
     RETURN new_id;
 END;
 $$ LANGUAGE plpgsql;
-
 
 CREATE OR REPLACE FUNCTION set_user_id_no()
 RETURNS TRIGGER AS $$
