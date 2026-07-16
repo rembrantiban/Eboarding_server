@@ -8,6 +8,7 @@ import { UploadApiResponse } from "cloudinary";
 import { AuthRequest } from "../../types/auth";
 
 
+
 export const register = async (req: Request, res: Response) => {
   try {
     const {
@@ -34,7 +35,7 @@ export const register = async (req: Request, res: Response) => {
 
     if (existingUser.rows.length > 0) {
       return res.status(400).json({
-        message: "User already exists",
+        message: "Username or email already exists",
       });
     }
 
