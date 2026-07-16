@@ -60,7 +60,15 @@ export const createInitialBilling = async (
 
     const balance = totalAmount;
 
+    const billingMonth = data.billingMonth ?? new Date();
 
+    const dueDate = data.dueDate
+        ? new Date(data.dueDate)
+        : new Date(
+            billingMonth.getFullYear(),
+            billingMonth.getMonth() + 1,
+            billingMonth.getDate()
+        );
 
     const result = await client.query(
         `
@@ -95,8 +103,8 @@ export const createInitialBilling = async (
             data.userId,
             data.assignmentId,
             "Monthly Rent",
-            data.billingMonth ?? new Date(),
-            data.dueDate ?? null,
+            billingMonth,
+            dueDate,
             roomFee,
             utilitiesFee,
             otherCharges,
