@@ -6,8 +6,9 @@ import boarderRoutes from "./modules/Boarder/boarder.routes"
 import paymentRoutes from "./modules/payments/payments.routes"
 import announcements from "./modules/anouncements/announcements.routes"
 import rules from "./modules/rules/rules.routes"
-import { assignRoom } from "./modules/RoomAssignment/AssignRoom.contoller"
 import documents from "./modules/Documents/documents.routes"
+import roomAssignmentRoutes from "./modules/RoomAssignment/AssignRoom.routes";
+
 
 import dotenv from "dotenv"
 dotenv.config()
@@ -40,7 +41,7 @@ app.use("/api/rooms", roomRoutes)
 app.use("/api/boarders", boarderRoutes)
 app.use("/api/payments", paymentRoutes)
 app.use("/api/announcements", announcements)
-app.use("/api/room-assignment", assignRoom)
+app.use("/api/room-assignment", roomAssignmentRoutes)
 app.use("/api/rules", rules)  
 app.use("/api/documents", documents)
 app.get("/", (req, res) => {
