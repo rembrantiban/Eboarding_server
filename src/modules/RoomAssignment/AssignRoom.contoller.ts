@@ -1,6 +1,8 @@
 import { Request, Response } from "express"
 import { pool } from "../../config/db"
 import { AuthRequest } from "../../types/auth";
+import { updateRoomStatus } from "./roomAssignment.helper";
+
 
 export const assignRoom = async (
   req: AuthRequest,
@@ -515,7 +517,7 @@ export const checkoutAssignment = async (
 
     const current = assignment.rows[0];
 
-    // Update assignment
+    // Mark assignment as checked out
     await client.query(
       `
       UPDATE room_assignments
@@ -527,7 +529,7 @@ export const checkoutAssignment = async (
       [id]
     );
 
-    // Free user
+    // Update user
     await client.query(
       `
       UPDATE users
@@ -547,30 +549,8 @@ export const checkoutAssignment = async (
       [current.bed_id]
     );
 
-    // Update room status
-    const occupied = await client.query(
-      `
-      SELECT COUNT(*)::int AS total
-      FROM beds
-      WHERE room_id=$1
-      AND status='Occupied'
-      `,
-      [current.room_id]
-    );
-
-    await client.query(
-      `
-      UPDATE rooms
-      SET status=$1
-      WHERE id=$2
-      `,
-      [
-        occupied.rows[0].total > 0
-          ? "Available"
-          : "Available",
-        current.room_id,
-      ]
-    );
+    // Recalculate room status
+    await updateRoomStatus(client, current.room_id);
 
     await client.query("COMMIT");
 
@@ -705,9 +685,12 @@ export const transferAssignment = async (
       [bed_id]
     );
 
-    //------------------------------------------------
-    // Create NEW assignment
-    //------------------------------------------------
+    await updateRoomStatus(client, current.room_id);
+
+    if (current.room_id !== room_id) {
+      await updateRoomStatus(client, room_id);
+    }
+
 
     const newAssignment =
       await client.query(
