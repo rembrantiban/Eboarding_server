@@ -2,6 +2,7 @@ import { Request, Response } from "express"
 import { pool } from "../../config/db"
 import { AuthRequest } from "../../types/auth";
 import { updateRoomStatus } from "./roomAssignment.helper";
+import { createInitialBilling } from "../Billing/billing.helper";
 
 
 export const assignRoom = async (
@@ -9,8 +10,10 @@ export const assignRoom = async (
   res: Response
 ) => {
   const client = await pool.connect();
+
   console.log("===== ASSIGN ROOM CONTROLLER =====");
   console.log(req.method, req.originalUrl);
+
   try {
     const {
       user_id,
@@ -22,11 +25,7 @@ export const assignRoom = async (
 
     const assigned_by = req.user?.id;
 
-    if (
-      !user_id ||
-      !room_id ||
-      !bed_id
-    ) {
+    if (!user_id || !room_id || !bed_id) {
       return res.status(400).json({
         message: "User, room and bed are required.",
       });
@@ -47,7 +46,7 @@ export const assignRoom = async (
       [user_id]
     );
 
-    if (userResult.rows.length === 0) {
+    if (userResult.rowCount === 0) {
       await client.query("ROLLBACK");
 
       return res.status(404).json({
@@ -76,7 +75,7 @@ export const assignRoom = async (
       [room_id]
     );
 
-    if (roomResult.rows.length === 0) {
+    if (roomResult.rowCount === 0) {
       await client.query("ROLLBACK");
 
       return res.status(404).json({
@@ -84,15 +83,11 @@ export const assignRoom = async (
       });
     }
 
-    if (
-      roomResult.rows[0].status ===
-      "Under Maintenance"
-    ) {
+    if (roomResult.rows[0].status === "Under Maintenance") {
       await client.query("ROLLBACK");
 
       return res.status(400).json({
-        message:
-          "Room is currently under maintenance.",
+        message: "Room is currently under maintenance.",
       });
     }
 
@@ -104,27 +99,21 @@ export const assignRoom = async (
       `
       SELECT *
       FROM beds
-      WHERE
-        id = $1
-      AND
-        room_id = $2
+      WHERE id = $1
+      AND room_id = $2
       `,
       [bed_id, room_id]
     );
 
-    if (bedResult.rows.length === 0) {
+    if (bedResult.rowCount === 0) {
       await client.query("ROLLBACK");
 
       return res.status(404).json({
-        message:
-          "Selected bed does not belong to this room.",
+        message: "Selected bed does not belong to this room.",
       });
     }
 
-    if (
-      bedResult.rows[0].status ===
-      "Occupied"
-    ) {
+    if (bedResult.rows[0].status === "Occupied") {
       await client.query("ROLLBACK");
 
       return res.status(400).json({
@@ -136,25 +125,21 @@ export const assignRoom = async (
     // CHECK ACTIVE ASSIGNMENT
     // ============================
 
-    const activeAssignment =
-      await client.query(
-        `
-        SELECT id
-        FROM room_assignments
-        WHERE
-            user_id = $1
-        AND
-            status = 'Active'
-        `,
-        [user_id]
-      );
+    const activeAssignment = await client.query(
+      `
+      SELECT id
+      FROM room_assignments
+      WHERE user_id = $1
+      AND status = 'Active'
+      `,
+      [user_id]
+    );
 
-    if (activeAssignment.rows.length > 0) {
+    if (activeAssignment.rowCount! > 0) {
       await client.query("ROLLBACK");
 
       return res.status(400).json({
-        message:
-          "User already has an active room assignment.",
+        message: "User already has an active room assignment.",
       });
     }
 
@@ -162,31 +147,32 @@ export const assignRoom = async (
     // CREATE ASSIGNMENT
     // ============================
 
-    const assignmentResult =
-      await client.query(
-        `
-        INSERT INTO room_assignments
-        (
-            user_id,
-            room_id,
-            bed_id,
-            expected_checkout,
-            assigned_by,
-            remarks
-        )
-        VALUES
-        ($1,$2,$3,$4,$5,$6)
-        RETURNING *
-        `,
-        [
+    const assignmentResult = await client.query(
+      `
+      INSERT INTO room_assignments
+      (
           user_id,
           room_id,
           bed_id,
-          expected_checkout || null,
-          assigned_by || null,
-          remarks || null,
-        ]
-      );
+          expected_checkout,
+          assigned_by,
+          remarks
+      )
+      VALUES
+      ($1,$2,$3,$4,$5,$6)
+      RETURNING *
+      `,
+      [
+        user_id,
+        room_id,
+        bed_id,
+        expected_checkout ?? null,
+        assigned_by ?? null,
+        remarks ?? null,
+      ]
+    );
+
+    const assignment = assignmentResult.rows[0];
 
     // ============================
     // UPDATE USER
@@ -218,76 +204,36 @@ export const assignRoom = async (
     // UPDATE ROOM STATUS
     // ============================
 
-    const occupiedBeds =
-      await client.query(
-        `
-        SELECT COUNT(*) AS occupied
-        FROM beds
-        WHERE
-            room_id = $1
-        AND
-            status = 'Occupied'
-        `,
-        [room_id]
-      );
+    await updateRoomStatus(client, room_id);
 
-    const totalBeds =
-      await client.query(
-        `
-        SELECT COUNT(*) AS total
-        FROM beds
-        WHERE room_id = $1
-        `,
-        [room_id]
-      );
+    // ============================
+    // CREATE INITIAL BILLING
+    // ============================
 
-    const occupied =
-      Number(
-        occupiedBeds.rows[0].occupied
-      );
+    await createInitialBilling(client, {
+      userId: user_id,
+      assignmentId: assignment.id,
+      roomId: room_id,
+      billingMonth: new Date(),
+      dueDate: expected_checkout ?? null,
+    });
 
-    const total =
-      Number(
-        totalBeds.rows[0].total
-      );
-
-    if (occupied >= total) {
-      await client.query(
-        `
-        UPDATE rooms
-        SET status = 'Occupied'
-        WHERE id = $1
-        `,
-        [room_id]
-      );
-    } else {
-      await client.query(
-        `
-        UPDATE rooms
-        SET status = 'Available'
-        WHERE id = $1
-        `,
-        [room_id]
-      );
-    }
+    // ============================
+    // COMMIT
+    // ============================
 
     await client.query("COMMIT");
 
     return res.status(201).json({
-      message:
-        "Room assigned successfully.",
-      assignment:
-        assignmentResult.rows[0],
+      message: "Room assigned successfully.",
+      assignment,
     });
 
   } catch (error) {
 
     await client.query("ROLLBACK");
 
-    console.error(
-      "Assign room error:",
-      error
-    );
+    console.error("Assign room error:", error);
 
     return res.status(500).json({
       message: "Server error.",
