@@ -9,7 +9,7 @@ import { checkAuth } from "../../middleware/checkAuth";
 const router = express.Router();
 
 router.post("/assign", checkAuth, assignRoom);
-router.get("/assigned-boarders", checkAuth, getAssignedBoarders);
+router.get("/get-assigned-boarders", checkAuth, getAssignedBoarders);
 router.put("/activate/:id", checkAuth, activateAssignment);
 router.put("/checkout/:id", checkAuth, checkoutAssignment);
 
