@@ -296,3 +296,222 @@ export const assignRoom = async (
 
   }
 };
+
+export const getAssignedBoarders = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+          u.id,
+          u.user_id_no,
+          u.first_name,
+          u.last_name,
+          u.email,
+          u.contact_number,
+          u.avatar_url,
+
+          ra.id AS assignment_id,
+          ra.assigned_date,
+          ra.expected_checkout,
+          ra.status,
+
+          r.id AS room_id,
+          r.room_number,
+
+          b.id AS bed_id,
+          b.bed_number
+
+      FROM users u
+
+      INNER JOIN room_assignments ra
+          ON ra.user_id = u.id
+          AND ra.status = 'Active'
+
+      INNER JOIN rooms r
+          ON r.id = ra.room_id
+
+      INNER JOIN beds b
+          ON b.id = ra.bed_id
+
+      WHERE
+          u.user_type = 'Boarder'
+      AND
+          u.is_assigned = TRUE
+
+      ORDER BY
+          u.first_name ASC;
+      `
+    );
+
+    return res.status(200).json(result.rows);
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Server error.",
+    });
+  }
+};
+
+export const activateAssignment = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `
+      UPDATE room_assignments
+      SET status = 'Active'
+      WHERE id = $1
+      RETURNING *;
+      `,
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        message: "Assignment not found.",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Assignment activated successfully.",
+      assignment: result.rows[0],
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Server error.",
+    });
+  }
+};
+
+export const checkoutAssignment = async (
+  req: Request,
+  res: Response
+) => {
+  const client = await pool.connect();
+
+  try {
+    const { id } = req.params;
+
+    await client.query("BEGIN");
+
+    const assignment = await client.query(
+      `
+      SELECT
+          user_id,
+          room_id,
+          bed_id
+      FROM room_assignments
+      WHERE
+          id = $1
+      AND
+          status = 'Active'
+      `,
+      [id]
+    );
+
+    if (assignment.rowCount === 0) {
+      await client.query("ROLLBACK");
+
+      return res.status(404).json({
+        message: "Active assignment not found.",
+      });
+    }
+
+    const {
+      user_id,
+      room_id,
+      bed_id,
+    } = assignment.rows[0];
+
+    // Update assignment
+    await client.query(
+      `
+      UPDATE room_assignments
+      SET
+          status = 'Checked-Out',
+          actual_checkout = NOW()
+      WHERE id = $1
+      `,
+      [id]
+    );
+
+    // Update user
+    await client.query(
+      `
+      UPDATE users
+      SET is_assigned = FALSE
+      WHERE id = $1
+      `,
+      [user_id]
+    );
+
+    // Free bed
+    await client.query(
+      `
+      UPDATE beds
+      SET status = 'Available'
+      WHERE id = $1
+      `,
+      [bed_id]
+    );
+
+    // Update room status
+    const occupied = await client.query(
+      `
+      SELECT COUNT(*)::int AS occupied
+      FROM beds
+      WHERE
+          room_id = $1
+      AND
+          status = 'Occupied'
+      `,
+      [room_id]
+    );
+
+    await client.query(
+      `
+      UPDATE rooms
+      SET status = $1
+      WHERE id = $2
+      `,
+      [
+        occupied.rows[0].occupied > 0
+          ? "Available"
+          : "Available",
+        room_id,
+      ]
+    );
+
+    await client.query("COMMIT");
+
+    return res.status(200).json({
+      message: "Boarder checked out successfully.",
+    });
+
+  } catch (error) {
+
+    await client.query("ROLLBACK");
+
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Server error.",
+    });
+
+  } finally {
+
+    client.release();
+
+  }
+};
