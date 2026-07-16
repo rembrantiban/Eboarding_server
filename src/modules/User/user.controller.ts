@@ -84,6 +84,7 @@ export const register = async (req: Request, res: Response) => {
       );
 
       validIdImage = uploadResult.secure_url;
+      
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -126,7 +127,6 @@ export const register = async (req: Request, res: Response) => {
         gender,
         age,
         valid_id_type,
-        validIdImage,
         valid_id_image,
         emergency_contact_name,
         emergency_contact_number,
