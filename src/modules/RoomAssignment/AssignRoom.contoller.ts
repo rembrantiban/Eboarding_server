@@ -7,7 +7,8 @@ export const assignRoom = async (
   res: Response
 ) => {
   const client = await pool.connect();
-
+  console.log("===== ASSIGN ROOM CONTROLLER =====");
+  console.log(req.method, req.originalUrl);
   try {
     const {
       user_id,
@@ -301,6 +302,9 @@ export const getAssignedBoarders = async (
   req: Request,
   res: Response
 ) => {
+  console.log("===== GET ASSIGNED BOARDERS =====");
+  console.log(req.method, req.originalUrl);
+  
   try {
     const result = await pool.query(
       `
