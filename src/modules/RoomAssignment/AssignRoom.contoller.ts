@@ -214,8 +214,6 @@ export const assignRoom = async (
       userId: user_id,
       assignmentId: assignment.id,
       roomId: room_id,
-      billingMonth: new Date(),
-      dueDate: expected_checkout ?? null,
     });
 
     // ============================
