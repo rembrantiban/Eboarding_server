@@ -572,6 +572,91 @@ export const getAssignedBoarders = async (
   }
 };
 
+export const getBoarderAssignedRoom = async (
+    req: Request,
+    res: Response
+) => {
+
+    try {
+
+        const { id } = req.params;
+
+        const result = await pool.query(
+            `
+            SELECT
+
+                ra.id AS assignment_id,
+                ra.assigned_date,
+                ra.expected_checkout,
+                ra.actual_checkout,
+                ra.status,
+                ra.remarks,
+
+                u.id AS user_id,
+                u.user_id_no,
+                u.first_name,
+                u.last_name,
+                u.email,
+                u.contact_number,
+                u.avatar_url,
+
+                r.id AS room_id,
+                r.room_number,
+                r.price_per_month,
+                r.capacity,
+                r.status AS room_status,
+
+                b.id AS bed_id,
+                b.bed_number,
+                b.status AS bed_status,
+
+                assigner.id AS assigned_by_id,
+                assigner.first_name AS assigned_by_first_name,
+                assigner.last_name AS assigned_by_last_name
+
+            FROM room_assignments ra
+
+            INNER JOIN users u
+                ON u.id = ra.user_id
+
+            INNER JOIN rooms r
+                ON r.id = ra.room_id
+
+            INNER JOIN beds b
+                ON b.id = ra.bed_id
+
+            LEFT JOIN users assigner
+                ON assigner.id = ra.assigned_by
+
+            WHERE
+                ra.user_id = $1
+                AND ra.status = 'Active'
+
+            LIMIT 1
+            `,
+            [id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({
+                message: "Boarder has no active room assignment.",
+            });
+        }
+
+        return res.status(200).json(result.rows[0]);
+
+    } catch (error) {
+
+        console.error("Get Boarder Assigned Room Error:", error);
+
+        return res.status(500).json({
+            message: "Server error.",
+        });
+
+    }
+
+};
+
 export const activateAssignment = async (
   req: Request,
   res: Response

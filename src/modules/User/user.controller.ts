@@ -611,7 +611,7 @@ export const getAllUsers = async (
         u.gender,
         u.age,
         u.valid_id_image,
-
+        u.valid_id_status,
         u.emergency_contact_name,
         u.emergency_contact_number,
         u.emergency_contact_relationship,
