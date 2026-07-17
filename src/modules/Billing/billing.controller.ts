@@ -642,6 +642,7 @@ export const getPaymentHistory = async (
                 b.billing_type,
                 b.billing_month,
                 b.due_date,
+                 b.updated_at,  
 
                 b.room_fee,
                 b.utilities_fee,
