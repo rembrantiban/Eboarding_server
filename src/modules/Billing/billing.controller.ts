@@ -617,7 +617,6 @@ export const getPaymentHistory = async (
     req: Request,
     res: Response
 ) => {
-
     try {
 
         const result = await pool.query(
@@ -625,25 +624,51 @@ export const getPaymentHistory = async (
             SELECT
 
                 bp.id,
+
+                CONCAT(
+                    'RCP-',
+                    TO_CHAR(bp.received_at,'YYYY'),
+                    '-',
+                    LPAD(bp.id::TEXT,6,'0')
+                ) AS receipt_no,
+
                 bp.billing_id,
-
-                b.billing_no,
-                b.billing_month,
-                b.billing_type,
-
                 bp.status,
                 bp.amount,
                 bp.received_at,
 
-                -- Boarder
+
+                b.billing_no,
+                b.billing_type,
+                b.billing_month,
+                b.due_date,
+
+                b.room_fee,
+                b.utilities_fee,
+                b.other_charges,
+                b.discount,
+                b.late_fee,
+
+                b.total_amount,
+                b.paid_amount,
+                b.balance,
+
+
                 boarder.id AS boarder_id,
                 boarder.user_id_no AS boarder_user_id_no,
                 boarder.first_name AS boarder_first_name,
                 boarder.last_name AS boarder_last_name,
                 boarder.email AS boarder_email,
+                boarder.contact_number AS boarder_contact_number,
                 boarder.avatar_url AS boarder_avatar_url,
 
-                -- Staff / Cashier
+
+                r.id AS room_id,
+                r.room_number,
+
+                bed.id AS bed_id,
+                bed.bed_number,
+
                 receiver.id AS received_by_id,
                 receiver.user_id_no,
                 receiver.first_name,
@@ -659,10 +684,20 @@ export const getPaymentHistory = async (
             INNER JOIN users boarder
                 ON boarder.id = b.user_id
 
+            LEFT JOIN room_assignments ra
+                ON ra.id = b.assignment_id
+
+            LEFT JOIN rooms r
+                ON r.id = ra.room_id
+
+            LEFT JOIN beds bed
+                ON bed.id = ra.bed_id
+
             INNER JOIN users receiver
                 ON receiver.id = bp.received_by
 
-          WHERE bp.status IN (
+            WHERE bp.status IN
+            (
                 'Partial',
                 'Paid'
             )
@@ -684,5 +719,4 @@ export const getPaymentHistory = async (
         });
 
     }
-
 };
