@@ -15,6 +15,14 @@ export const recordPayment = async (
         const { id } = req.params;
         const { amount } = req.body;
 
+        const received_by = req.user?.id;
+
+        if (!received_by) {
+            return res.status(401).json({
+                message: "Unauthorized.",
+            });
+        }
+
         if (!amount || Number(amount) <= 0) {
             return res.status(400).json({
                 message: "Payment amount is required.",
@@ -113,15 +121,40 @@ export const recordPayment = async (
                 paid_amount = $1,
                 balance = $2,
                 status = $3,
+                received_by = $4,
                 updated_at = NOW()
-            WHERE id = $4
+            WHERE id = $5
             RETURNING *
             `,
             [
                 paidAmount,
                 balance,
                 status,
+                received_by,
                 id,
+            ]
+        );
+
+        //----------------------------------------------------
+        // Record Payment History
+        //----------------------------------------------------
+
+        await client.query(
+            `
+            INSERT INTO billing_payments
+            (
+                billing_id,
+                amount,
+                received_by,
+                received_at
+            )
+            VALUES
+            ($1, $2, $3, NOW())
+            `,
+            [
+                id,
+                amount,
+                received_by,
             ]
         );
 
@@ -133,11 +166,13 @@ export const recordPayment = async (
 
             if (billing.assignment_status === "Active") {
 
-                const currentBillingMonth = billing.billing_month
-                    ? new Date(billing.billing_month)
-                    : new Date();
+                const currentBillingMonth =
+                    billing.billing_month
+                        ? new Date(billing.billing_month)
+                        : new Date();
 
-                const nextMonth = new Date(currentBillingMonth);
+                const nextMonth =
+                    new Date(currentBillingMonth);
 
                 nextMonth.setMonth(
                     nextMonth.getMonth() + 1
@@ -564,6 +599,70 @@ export const applyDiscount = async (
     } finally {
 
         client.release();
+
+    }
+
+};
+
+export const getPaymentHistory = async (
+    req: Request,
+    res: Response
+) => {
+
+    try {
+
+        const { id } = req.params;
+
+        const result = await pool.query(
+            `
+            SELECT
+
+                bp.id,
+                bp.billing_id,
+
+                b.billing_no,
+                b.billing_month,
+                b.billing_type,
+                b.status,
+
+                bp.amount,
+                bp.received_at,
+
+                u.id AS received_by_id,
+                u.user_id_no,
+                u.first_name,
+                u.last_name,
+                u.email,
+                u.avatar_url
+
+            FROM billing_payments bp
+
+            INNER JOIN billings b
+                ON b.id = bp.billing_id
+
+            INNER JOIN users u
+                ON u.id = bp.received_by
+
+            WHERE
+                bp.billing_id = $1
+                AND b.status IN ('Partial', 'Paid')
+
+            ORDER BY
+                bp.received_at DESC,
+                bp.id DESC
+            `,
+            [id]
+        );
+
+        return res.status(200).json(result.rows);
+
+    } catch (error) {
+
+        console.error("Get Payment History Error:", error);
+
+        return res.status(500).json({
+            message: "Server error.",
+        });
 
     }
 

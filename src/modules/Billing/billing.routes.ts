@@ -2,8 +2,8 @@ import {
     applyDiscount,
     applyLatePaymentFee,
     getAllBillings, 
-    recordPayment
-
+    recordPayment,
+    getPaymentHistory,
 } from "./billing.controller"
 import express from "express"
 import { checkAuth } from "../../middleware/checkAuth"
@@ -14,5 +14,6 @@ router.get("/get-all", checkAuth, getAllBillings)
 router.put("/record-payment/:id", checkAuth, recordPayment)
 router.put("/apply-late-fee/:id", checkAuth, applyLatePaymentFee);
 router.put( "/apply-discount/:id",checkAuth, applyDiscount);
+router.get("/payment-history/:id", checkAuth, getPaymentHistory);
 
 export default router
