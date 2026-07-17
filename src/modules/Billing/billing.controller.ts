@@ -614,8 +614,6 @@ export const getPaymentHistory = async (
 
     try {
 
-        const { id } = req.params;
-
         const result = await pool.query(
             `
             SELECT
@@ -631,7 +629,7 @@ export const getPaymentHistory = async (
                 bp.amount,
                 bp.received_at,
 
-
+                -- Boarder
                 boarder.id AS boarder_id,
                 boarder.user_id_no AS boarder_user_id_no,
                 boarder.first_name AS boarder_first_name,
@@ -639,7 +637,7 @@ export const getPaymentHistory = async (
                 boarder.email AS boarder_email,
                 boarder.avatar_url AS boarder_avatar_url,
 
-
+                -- Staff / Cashier
                 receiver.id AS received_by_id,
                 receiver.user_id_no,
                 receiver.first_name,
@@ -652,22 +650,21 @@ export const getPaymentHistory = async (
             INNER JOIN billings b
                 ON b.id = bp.billing_id
 
-
             INNER JOIN users boarder
                 ON boarder.id = b.user_id
 
             INNER JOIN users receiver
                 ON receiver.id = bp.received_by
 
-            WHERE
-                bp.billing_id = $1
-                AND b.status IN ('Partial', 'Paid')
+            WHERE b.status IN (
+                'Partial',
+                'Paid'
+            )
 
             ORDER BY
                 bp.received_at DESC,
                 bp.id DESC
-            `,
-            [id]
+            `
         );
 
         return res.status(200).json(result.rows);
