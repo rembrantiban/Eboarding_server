@@ -304,6 +304,12 @@ export const getAllBillings = async (
             LEFT JOIN beds bd
                 ON bd.id = ra.bed_id
 
+            WHERE b.status IN (
+                'Pending',
+                'Partial',
+                'Overdue'
+            )
+
             ORDER BY
                 b.created_at DESC;
             `
