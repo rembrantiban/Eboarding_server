@@ -628,20 +628,33 @@ export const getPaymentHistory = async (
                 bp.amount,
                 bp.received_at,
 
-                u.id AS received_by_id,
-                u.user_id_no,
-                u.first_name,
-                u.last_name,
-                u.email,
-                u.avatar_url
+
+                boarder.id AS boarder_id,
+                boarder.user_id_no AS boarder_user_id_no,
+                boarder.first_name AS boarder_first_name,
+                boarder.last_name AS boarder_last_name,
+                boarder.email AS boarder_email,
+                boarder.avatar_url AS boarder_avatar_url,
+
+
+                receiver.id AS received_by_id,
+                receiver.user_id_no,
+                receiver.first_name,
+                receiver.last_name,
+                receiver.email,
+                receiver.avatar_url
 
             FROM billing_payments bp
 
             INNER JOIN billings b
                 ON b.id = bp.billing_id
 
-            INNER JOIN users u
-                ON u.id = bp.received_by
+
+            INNER JOIN users boarder
+                ON boarder.id = b.user_id
+
+            INNER JOIN users receiver
+                ON receiver.id = bp.received_by
 
             WHERE
                 bp.billing_id = $1
