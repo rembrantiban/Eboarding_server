@@ -3,8 +3,6 @@ import { pool } from "../../config/db";;
 import { createMonthlyBilling } from "./billing.helper";
 import { AuthRequest } from "../../types/auth";
 
-
-
 export const recordPayment = async (
     req: AuthRequest,
     res: Response
