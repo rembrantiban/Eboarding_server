@@ -630,8 +630,8 @@ export const getPaymentHistory = async (
                 b.billing_no,
                 b.billing_month,
                 b.billing_type,
-                b.status,
 
+                bp.status,
                 bp.amount,
                 bp.received_at,
 
@@ -662,7 +662,7 @@ export const getPaymentHistory = async (
             INNER JOIN users receiver
                 ON receiver.id = bp.received_by
 
-            WHERE b.status IN (
+          WHERE bp.status IN (
                 'Partial',
                 'Paid'
             )
