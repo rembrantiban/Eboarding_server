@@ -14,6 +14,6 @@ router.get("/get-all", checkAuth, getAllBillings)
 router.put("/record-payment/:id", checkAuth, recordPayment)
 router.put("/apply-late-fee/:id", checkAuth, applyLatePaymentFee);
 router.put( "/apply-discount/:id",checkAuth, applyDiscount);
-router.get("/payment-history/:id", checkAuth, getPaymentHistory);
+router.get("/payment-history", checkAuth, getPaymentHistory);
 
 export default router
