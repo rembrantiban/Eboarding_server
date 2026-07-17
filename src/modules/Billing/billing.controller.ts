@@ -102,16 +102,20 @@ export const recordPayment = async (
             Number(billing.total_amount) -
             paidAmount;
 
-        let status = "Pending";
+        //----------------------------------------------------
+        // Determine New Billing Status
+        //----------------------------------------------------
+
+        let status: "Partial" | "Paid";
 
         if (balance <= 0) {
             status = "Paid";
-        } else if (paidAmount > 0) {
+        } else {
             status = "Partial";
         }
 
         //----------------------------------------------------
-        // Update Billing Summary
+        // Update Billing
         //----------------------------------------------------
 
         const updatedBilling = await client.query(
@@ -143,15 +147,17 @@ export const recordPayment = async (
             (
                 billing_id,
                 amount,
+                status,
                 received_by,
                 received_at
             )
             VALUES
-            ($1, $2, $3, NOW())
+            ($1, $2, $3, $4, NOW())
             `,
             [
                 id,
                 amount,
+                status,
                 received_by,
             ]
         );
@@ -169,7 +175,8 @@ export const recordPayment = async (
                         ? new Date(billing.billing_month)
                         : new Date();
 
-                const nextMonth = new Date(currentBillingMonth);
+                const nextMonth =
+                    new Date(currentBillingMonth);
 
                 nextMonth.setMonth(
                     nextMonth.getMonth() + 1
@@ -235,7 +242,6 @@ export const recordPayment = async (
     }
 
 };
-
 export const getAllBillings = async (
     req: Request,
     res: Response
