@@ -145,7 +145,8 @@ export const recordPayment = async (
                 roomId: billing.room_id,
                 billingMonth: nextMonth,
             });
-
+            
+            console.log(billing.billing_month);
         }
 
         //----------------------------------------------------
@@ -163,15 +164,13 @@ export const recordPayment = async (
 
     } catch (error) {
 
-        await client.query("ROLLBACK");
+    await client.query("ROLLBACK");
 
-        console.error(error);
+    console.error("Record Payment Error:", error);
 
-        return res.status(500).json({
-            message: "Server error.",
-        });
-
-    } finally {
+    return res.status(500).json({
+        message: error instanceof Error ? error.message : "Server error.",
+    });
 
         client.release();
 
