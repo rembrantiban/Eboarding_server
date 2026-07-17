@@ -111,7 +111,7 @@ export const recordPayment = async (
         }
 
         //----------------------------------------------------
-        // Update Billing
+        // Update Billing Summary
         //----------------------------------------------------
 
         const updatedBilling = await client.query(
@@ -121,16 +121,14 @@ export const recordPayment = async (
                 paid_amount = $1,
                 balance = $2,
                 status = $3,
-                received_by = $4,
                 updated_at = NOW()
-            WHERE id = $5
+            WHERE id = $4
             RETURNING *
             `,
             [
                 paidAmount,
                 balance,
                 status,
-                received_by,
                 id,
             ]
         );
@@ -171,8 +169,7 @@ export const recordPayment = async (
                         ? new Date(billing.billing_month)
                         : new Date();
 
-                const nextMonth =
-                    new Date(currentBillingMonth);
+                const nextMonth = new Date(currentBillingMonth);
 
                 nextMonth.setMonth(
                     nextMonth.getMonth() + 1
