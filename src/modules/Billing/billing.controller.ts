@@ -13,10 +13,7 @@ export const recordPayment = async (
     try {
 
         const { id } = req.params;
-
-        const {
-            amount,
-        } = req.body;
+        const { amount } = req.body;
 
         if (!amount || Number(amount) <= 0) {
             return res.status(400).json({
@@ -26,7 +23,9 @@ export const recordPayment = async (
 
         await client.query("BEGIN");
 
-
+        //----------------------------------------------------
+        // Get Billing
+        //----------------------------------------------------
 
         const billingResult = await client.query(
             `
@@ -37,7 +36,7 @@ export const recordPayment = async (
             LEFT JOIN room_assignments ra
                 ON ra.id = b.assignment_id
             WHERE b.id = $1
-            FOR UPDATE
+            FOR UPDATE OF b
             `,
             [id]
         );
@@ -69,7 +68,7 @@ export const recordPayment = async (
         }
 
         //----------------------------------------------------
-        // Validate Amount
+        // Validate Payment
         //----------------------------------------------------
 
         if (Number(amount) > Number(billing.balance)) {
@@ -83,7 +82,7 @@ export const recordPayment = async (
         }
 
         //----------------------------------------------------
-        // Compute
+        // Compute Payment
         //----------------------------------------------------
 
         const paidAmount =
@@ -98,8 +97,7 @@ export const recordPayment = async (
 
         if (balance <= 0) {
             status = "Paid";
-        }
-        else if (paidAmount > 0) {
+        } else if (paidAmount > 0) {
             status = "Partial";
         }
 
@@ -132,12 +130,22 @@ export const recordPayment = async (
 
         if (status === "Paid") {
 
-            const nextMonth =
-                new Date(billing.billing_month);
+            const currentBillingMonth = billing.billing_month
+                ? new Date(billing.billing_month)
+                : new Date();
 
-            nextMonth.setMonth(
-                nextMonth.getMonth() + 1
-            );
+            const nextMonth = new Date(currentBillingMonth);
+
+            nextMonth.setMonth(nextMonth.getMonth() + 1);
+
+            console.log("Creating next billing...");
+            console.log({
+                userId: billing.user_id,
+                assignmentId: billing.assignment_id,
+                roomId: billing.room_id,
+                billingMonth: currentBillingMonth,
+                nextMonth,
+            });
 
             await createMonthlyBilling(client, {
                 userId: billing.user_id,
@@ -145,8 +153,7 @@ export const recordPayment = async (
                 roomId: billing.room_id,
                 billingMonth: nextMonth,
             });
-            
-            console.log(billing.billing_month);
+
         }
 
         //----------------------------------------------------
@@ -156,21 +163,27 @@ export const recordPayment = async (
         await client.query("COMMIT");
 
         return res.status(200).json({
-            message: status === "Paid"
-                ? "Payment completed successfully."
-                : "Partial payment recorded successfully.",
+            message:
+                status === "Paid"
+                    ? "Payment completed successfully."
+                    : "Partial payment recorded successfully.",
             billing: updatedBilling.rows[0],
         });
 
     } catch (error) {
 
-    await client.query("ROLLBACK");
+        await client.query("ROLLBACK");
 
-    console.error("Record Payment Error:", error);
+        console.error("Record Payment Error:", error);
 
-    return res.status(500).json({
-        message: error instanceof Error ? error.message : "Server error.",
-    });
+        return res.status(500).json({
+            message:
+                error instanceof Error
+                    ? error.message
+                    : "Server error.",
+        });
+
+    } finally {
 
         client.release();
 
