@@ -286,3 +286,285 @@ export const getAllBillings = async (
 
     }
 };
+
+export const applyLatePaymentFee = async (
+    req: AuthRequest,
+    res: Response
+) => {
+
+    const client = await pool.connect();
+
+    try {
+
+        const { id } = req.params;
+        const { late_fee } = req.body;
+
+        if (!late_fee || Number(late_fee) <= 0) {
+            return res.status(400).json({
+                message: "Late payment fee is required.",
+            });
+        }
+
+        await client.query("BEGIN");
+
+
+        const billingResult = await client.query(
+            `
+            SELECT *
+            FROM billings
+            WHERE id = $1
+            FOR UPDATE
+            `,
+            [id]
+        );
+
+        if (billingResult.rowCount === 0) {
+
+            await client.query("ROLLBACK");
+
+            return res.status(404).json({
+                message: "Billing not found.",
+            });
+
+        }
+
+        const billing = billingResult.rows[0];
+
+
+
+        if (
+            billing.status === "Paid" ||
+            billing.status === "Cancelled"
+        ) {
+
+            await client.query("ROLLBACK");
+
+            return res.status(400).json({
+                message:
+                    "Late fee cannot be applied to this billing.",
+            });
+
+        }
+
+
+        const newLateFee =
+            Number(billing.late_fee) +
+            Number(late_fee);
+
+        const newTotal =
+            Number(billing.total_amount) +
+            Number(late_fee);
+
+        const newBalance =
+            Number(billing.balance) +
+            Number(late_fee);
+
+        //--------------------------------------------------
+        // Update
+        //--------------------------------------------------
+
+        const result = await client.query(
+            `
+            UPDATE billings
+            SET
+                late_fee = $1,
+                total_amount = $2,
+                balance = $3,
+                status = 'Overdue',
+                updated_at = NOW()
+            WHERE id = $4
+            RETURNING *
+            `,
+            [
+                newLateFee,
+                newTotal,
+                newBalance,
+                id,
+            ]
+        );
+
+        await client.query("COMMIT");
+
+        return res.status(200).json({
+            message: "Late payment fee applied successfully.",
+            billing: result.rows[0],
+        });
+
+    } catch (error) {
+
+        await client.query("ROLLBACK");
+
+        console.error(error);
+
+        return res.status(500).json({
+            message: "Server error.",
+        });
+
+    } finally {
+
+        client.release();
+
+    }
+
+};
+
+export const applyDiscount = async (
+    req: AuthRequest,
+    res: Response
+) => {
+
+    const client = await pool.connect();
+
+    try {
+
+        const { id } = req.params;
+        const { discount } = req.body;
+
+        if (!discount || Number(discount) <= 0) {
+            return res.status(400).json({
+                message: "Discount amount is required.",
+            });
+        }
+
+        await client.query("BEGIN");
+
+        //--------------------------------------------------
+        // Get Billing
+        //--------------------------------------------------
+
+        const billingResult = await client.query(
+            `
+            SELECT *
+            FROM billings
+            WHERE id = $1
+            FOR UPDATE
+            `,
+            [id]
+        );
+
+        if (billingResult.rowCount === 0) {
+
+            await client.query("ROLLBACK");
+
+            return res.status(404).json({
+                message: "Billing not found.",
+            });
+
+        }
+
+        const billing = billingResult.rows[0];
+
+        //--------------------------------------------------
+        // Cannot modify Paid / Cancelled
+        //--------------------------------------------------
+
+        if (
+            billing.status === "Paid" ||
+            billing.status === "Cancelled"
+        ) {
+
+            await client.query("ROLLBACK");
+
+            return res.status(400).json({
+                message:
+                    "Discount cannot be applied to this billing.",
+            });
+
+        }
+
+        //--------------------------------------------------
+        // Prevent discount greater than balance
+        //--------------------------------------------------
+
+        if (Number(discount) > Number(billing.balance)) {
+
+            await client.query("ROLLBACK");
+
+            return res.status(400).json({
+                message:
+                    "Discount cannot exceed remaining balance.",
+            });
+
+        }
+
+        //--------------------------------------------------
+        // Compute
+        //--------------------------------------------------
+
+        const newDiscount =
+            Number(billing.discount) +
+            Number(discount);
+
+        const newTotal =
+            Number(billing.total_amount) -
+            Number(discount);
+
+        const newBalance =
+            Number(billing.balance) -
+            Number(discount);
+
+        //--------------------------------------------------
+        // Determine Status
+        //--------------------------------------------------
+
+        let status = billing.status;
+
+        if (newBalance <= 0) {
+            status = "Paid";
+        }
+        else if (Number(billing.paid_amount) > 0) {
+            status = "Partial";
+        }
+        else {
+            status = "Pending";
+        }
+
+        //--------------------------------------------------
+        // Update Billing
+        //--------------------------------------------------
+
+        const result = await client.query(
+            `
+            UPDATE billings
+            SET
+                discount = $1,
+                total_amount = $2,
+                balance = $3,
+                status = $4,
+                updated_at = NOW()
+            WHERE id = $5
+            RETURNING *
+            `,
+            [
+                newDiscount,
+                newTotal,
+                newBalance,
+                status,
+                id,
+            ]
+        );
+
+        await client.query("COMMIT");
+
+        return res.status(200).json({
+            message: "Discount applied successfully.",
+            billing: result.rows[0],
+        });
+
+    } catch (error) {
+
+        await client.query("ROLLBACK");
+
+        console.error(error);
+
+        return res.status(500).json({
+            message: "Server error.",
+        });
+
+    } finally {
+
+        client.release();
+
+    }
+
+};
