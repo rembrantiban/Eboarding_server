@@ -31,7 +31,8 @@ export const recordPayment = async (
             `
             SELECT
                 b.*,
-                ra.room_id
+                ra.room_id,
+                ra.status AS assignment_status
             FROM billings b
             LEFT JOIN room_assignments ra
                 ON ra.id = b.assignment_id
@@ -125,34 +126,46 @@ export const recordPayment = async (
         );
 
         //----------------------------------------------------
-        // Create Next Month Billing
+        // Generate Next Billing
         //----------------------------------------------------
 
         if (status === "Paid") {
 
-            const currentBillingMonth = billing.billing_month
-                ? new Date(billing.billing_month)
-                : new Date();
+            if (billing.assignment_status === "Active") {
 
-            const nextMonth = new Date(currentBillingMonth);
+                const currentBillingMonth = billing.billing_month
+                    ? new Date(billing.billing_month)
+                    : new Date();
 
-            nextMonth.setMonth(nextMonth.getMonth() + 1);
+                const nextMonth = new Date(currentBillingMonth);
 
-            console.log("Creating next billing...");
-            console.log({
-                userId: billing.user_id,
-                assignmentId: billing.assignment_id,
-                roomId: billing.room_id,
-                billingMonth: currentBillingMonth,
-                nextMonth,
-            });
+                nextMonth.setMonth(
+                    nextMonth.getMonth() + 1
+                );
 
-            await createMonthlyBilling(client, {
-                userId: billing.user_id,
-                assignmentId: billing.assignment_id,
-                roomId: billing.room_id,
-                billingMonth: nextMonth,
-            });
+                console.log("Creating next month's billing...");
+                console.log({
+                    assignmentStatus: billing.assignment_status,
+                    userId: billing.user_id,
+                    assignmentId: billing.assignment_id,
+                    roomId: billing.room_id,
+                    billingMonth: nextMonth,
+                });
+
+                await createMonthlyBilling(client, {
+                    userId: billing.user_id,
+                    assignmentId: billing.assignment_id,
+                    roomId: billing.room_id,
+                    billingMonth: nextMonth,
+                });
+
+            } else {
+
+                console.log(
+                    `Skipping next billing because assignment status is '${billing.assignment_status}'.`
+                );
+
+            }
 
         }
 
@@ -190,6 +203,7 @@ export const recordPayment = async (
     }
 
 };
+
 export const getAllBillings = async (
     req: Request,
     res: Response
