@@ -2,7 +2,7 @@ import { Request, Response } from "express"
 import { pool } from "../../config/db"
 import { AuthRequest } from "../../types/auth";
 import { updateRoomStatus } from "./roomAssignment.helper";
-import { createInitialBilling } from "../Billing/billing.helper";
+import { createMonthlyBilling  } from "../Billing/billing.helper";
 
 
 export const assignRoom = async (
@@ -210,7 +210,7 @@ export const assignRoom = async (
     // CREATE INITIAL BILLING
     // ============================
 
-    await createInitialBilling(client, {
+    await createMonthlyBilling(client, {
       userId: user_id,
       assignmentId: assignment.id,
       roomId: room_id,
@@ -244,6 +244,265 @@ export const assignRoom = async (
   }
 };
 
+export const transferAssignment = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  const client = await pool.connect();
+
+  try {
+
+    const { id } = req.params;
+
+    const {
+      room_id,
+      bed_id,
+      expected_checkout,
+      remarks,
+    } = req.body;
+
+    const assigned_by = req.user?.id;
+
+    await client.query("BEGIN");
+
+    const currentAssignment =
+      await client.query(
+        `
+        SELECT *
+        FROM room_assignments
+        WHERE
+            id=$1
+        AND
+            status='Active'
+        `,
+        [id]
+      );
+
+    if (currentAssignment.rowCount === 0) {
+
+      await client.query("ROLLBACK");
+
+      return res.status(404).json({
+        message: "Assignment not found.",
+      });
+
+    }
+
+    const current = currentAssignment.rows[0];
+
+
+    const bed = await client.query(
+      `
+      SELECT *
+      FROM beds
+      WHERE
+          id=$1
+      AND
+          room_id=$2
+      `,
+      [bed_id, room_id]
+    );
+
+    if (bed.rowCount === 0) {
+
+      await client.query("ROLLBACK");
+
+      return res.status(404).json({
+        message: "Bed not found.",
+      });
+
+    }
+
+    if (bed.rows[0].status === "Occupied") {
+
+      await client.query("ROLLBACK");
+
+      return res.status(400).json({
+        message: "Bed already occupied.",
+      });
+
+    }
+
+    await client.query(
+      `
+      UPDATE room_assignments
+      SET
+          status='Transferred',
+          actual_checkout=NOW()
+      WHERE id=$1
+      `,
+      [id]
+    );
+
+
+
+    await client.query(
+      `
+      UPDATE beds
+      SET status='Available'
+      WHERE id=$1
+      `,
+      [current.bed_id]
+    );
+
+    await client.query(
+      `
+      UPDATE beds
+      SET status='Occupied'
+      WHERE id=$1
+      `,
+      [bed_id]
+    );
+
+    await updateRoomStatus(client, current.room_id);
+
+    if (current.room_id !== room_id) {
+      await updateRoomStatus(client, room_id);
+    }
+
+
+    const newAssignmentResult =
+      await client.query(
+        `
+    INSERT INTO room_assignments
+    (
+        user_id,
+        room_id,
+        bed_id,
+        expected_checkout,
+        assigned_by,
+        remarks
+    )
+    VALUES
+    ($1,$2,$3,$4,$5,$6)
+    RETURNING *
+    `,
+        [
+          current.user_id,
+          room_id,
+          bed_id,
+          expected_checkout ?? null,
+          assigned_by ?? null,
+          remarks ?? null,
+        ]
+      );
+
+    const newAssignment = newAssignmentResult.rows[0];
+
+    const roomResult = await client.query(
+  `
+  SELECT price_per_month
+  FROM rooms
+  WHERE id = $1
+  `,
+  [room_id]
+);
+
+if (roomResult.rowCount === 0) {
+  throw new Error("Room not found.");
+}
+
+const roomFee = Number(roomResult.rows[0].price_per_month);
+
+// ============================
+// FIND CURRENT UNPAID BILLING
+// ============================
+
+const billingResult = await client.query(
+  `
+  SELECT
+      id,
+      paid_amount,
+      utilities_fee,
+      other_charges,
+      discount,
+      late_fee
+  FROM billings
+  WHERE
+      assignment_id = $1
+  AND
+      status IN ('Pending', 'Partial')
+  ORDER BY created_at DESC
+  LIMIT 1
+  `,
+  [current.id]
+);
+
+// ============================
+// MOVE BILLING TO NEW ASSIGNMENT
+// ============================
+
+if (billingResult.rowCount! > 0) {
+
+  const billing = billingResult.rows[0];
+
+  const totalAmount =
+    roomFee +
+    Number(billing.utilities_fee) +
+    Number(billing.other_charges) +
+    Number(billing.late_fee) -
+    Number(billing.discount);
+
+  const balance =
+    totalAmount - Number(billing.paid_amount);
+
+  let status = "Pending";
+
+  if (balance <= 0) {
+    status = "Paid";
+  } else if (Number(billing.paid_amount) > 0) {
+    status = "Partial";
+  }
+
+  await client.query(
+    `
+    UPDATE billings
+    SET
+        assignment_id = $1,
+        room_fee = $2,
+        total_amount = $3,
+        balance = $4,
+        status = $5,
+        updated_at = NOW()
+    WHERE id = $6
+    `,
+    [
+      newAssignment.id,
+      roomFee,
+      totalAmount,
+      balance,
+      status,
+      billing.id,
+    ]
+  );
+
+}
+
+    await client.query("COMMIT");
+
+    return res.json({
+      message: "Boarder transferred successfully.",
+      assignment: newAssignment,
+    });
+
+
+
+  } catch (err) {
+
+    await client.query("ROLLBACK");
+
+    console.error(err);
+
+    return res.status(500).json({
+      message: "Server error.",
+    });
+
+  } finally {
+
+    client.release();
+
+  }
+};
 export const getAssignedBoarders = async (
   req: Request,
   res: Response
@@ -519,169 +778,3 @@ export const checkoutAssignment = async (
   }
 };
 
-export const transferAssignment = async (
-  req: AuthRequest,
-  res: Response
-) => {
-  const client = await pool.connect();
-
-  try {
-
-    const { id } = req.params;
-
-    const {
-      room_id,
-      bed_id,
-      expected_checkout,
-      remarks,
-    } = req.body;
-
-    const assigned_by = req.user?.id;
-
-    await client.query("BEGIN");
-
-    const currentAssignment =
-      await client.query(
-        `
-        SELECT *
-        FROM room_assignments
-        WHERE
-            id=$1
-        AND
-            status='Active'
-        `,
-        [id]
-      );
-
-    if (currentAssignment.rowCount === 0) {
-
-      await client.query("ROLLBACK");
-
-      return res.status(404).json({
-        message: "Assignment not found.",
-      });
-
-    }
-
-    const current = currentAssignment.rows[0];
-
-
-    const bed = await client.query(
-      `
-      SELECT *
-      FROM beds
-      WHERE
-          id=$1
-      AND
-          room_id=$2
-      `,
-      [bed_id, room_id]
-    );
-
-    if (bed.rowCount === 0) {
-
-      await client.query("ROLLBACK");
-
-      return res.status(404).json({
-        message: "Bed not found.",
-      });
-
-    }
-
-    if (bed.rows[0].status === "Occupied") {
-
-      await client.query("ROLLBACK");
-
-      return res.status(400).json({
-        message: "Bed already occupied.",
-      });
-
-    }
-
-    await client.query(
-      `
-      UPDATE room_assignments
-      SET
-          status='Transferred',
-          actual_checkout=NOW()
-      WHERE id=$1
-      `,
-      [id]
-    );
-
-
-
-    await client.query(
-      `
-      UPDATE beds
-      SET status='Available'
-      WHERE id=$1
-      `,
-      [current.bed_id]
-    );
-
-    await client.query(
-      `
-      UPDATE beds
-      SET status='Occupied'
-      WHERE id=$1
-      `,
-      [bed_id]
-    );
-
-    await updateRoomStatus(client, current.room_id);
-
-    if (current.room_id !== room_id) {
-      await updateRoomStatus(client, room_id);
-    }
-
-
-    const newAssignment =
-      await client.query(
-        `
-        INSERT INTO room_assignments
-        (
-            user_id,
-            room_id,
-            bed_id,
-            expected_checkout,
-            assigned_by,
-            remarks
-        )
-        VALUES
-        ($1,$2,$3,$4,$5,$6)
-        RETURNING *
-        `,
-        [
-          current.user_id,
-          room_id,
-          bed_id,
-          expected_checkout ?? null,
-          assigned_by,
-          remarks ?? null,
-        ]
-      );
-
-    await client.query("COMMIT");
-
-    return res.json({
-      message: "Boarder transferred successfully.",
-      assignment: newAssignment.rows[0],
-    });
-
-  } catch (err) {
-
-    await client.query("ROLLBACK");
-
-    console.error(err);
-
-    return res.status(500).json({
-      message: "Server error.",
-    });
-
-  } finally {
-
-    client.release();
-
-  }
-};
