@@ -733,13 +733,13 @@ export const getOutstandingBalance = async (
         const result = await pool.query(
             `
             SELECT
-                COALESCE(SUM(balance), 0) AS outstanding_balance,
-                COUNT(*) AS pending_count
+                billing_no,
+                due_date,
+                balance,
+                status
             FROM billings
             WHERE
                 user_id = $1
-            AND
-                due_date <= CURRENT_DATE
             AND
                 status IN
                 (
@@ -747,23 +747,37 @@ export const getOutstandingBalance = async (
                     'Partial',
                     'Overdue'
                 )
+            ORDER BY due_date ASC
+            LIMIT 1
             `,
             [userId]
         );
 
-        return res.status(200).json(result.rows[0]);
+        if (result.rowCount === 0) {
+            return res.json({
+                outstanding_balance: 0,
+                pending_count: 0,
+            });
+        }
+
+        return res.json({
+            outstanding_balance: Number(result.rows[0].balance),
+            pending_count: 1,
+            due_date: result.rows[0].due_date,
+            billing_no: result.rows[0].billing_no,
+            status: result.rows[0].status,
+        });
 
     } catch (error) {
 
-        console.error("Outstanding Balance Error:", error);
+        console.error(error);
 
         return res.status(500).json({
-            message: "Server error."
+            message: "Server error.",
         });
 
     }
 };
-
 
 export const getActivePenalties = async (
     req: AuthRequest,
