@@ -415,28 +415,28 @@ export const updateRoom = async (req: Request, res: Response) => {
         });
       }
     }
-     
+
     if (capacity !== undefined) {
-  const occupiedResult = await client.query(
-    `
+      const occupiedResult = await client.query(
+        `
     SELECT COUNT(*) AS occupied
     FROM room_assignments
     WHERE room_id = $1
       AND status = 'Active'
     `,
-    [id]
-  );
+        [id]
+      );
 
-  const occupied = Number(occupiedResult.rows[0].occupied);
+      const occupied = Number(occupiedResult.rows[0].occupied);
 
-  if (capacity < occupied) {
-    await client.query("ROLLBACK");
+      if (capacity < occupied) {
+        await client.query("ROLLBACK");
 
-    return res.status(400).json({
-      message: `Cannot reduce capacity below ${occupied} occupied bed(s).`,
-    });
-  }
-}
+        return res.status(400).json({
+          message: `Cannot reduce capacity below ${occupied} occupied bed(s).`,
+        });
+      }
+    }
 
     const updates: string[] = [];
     const values: any[] = [];
@@ -488,34 +488,97 @@ export const updateRoom = async (req: Request, res: Response) => {
     const imageUrls: string[] = [];
 
     if (Array.isArray(req.files) && req.files.length > 0) {
+
+      // Get old images
+      const oldImages = await client.query(
+        `
+    SELECT image_url
+    FROM room_images
+    WHERE room_id = $1
+    `,
+        [id]
+      );
+
+      // Delete from Cloudinary
+      for (const image of oldImages.rows) {
+
+        try {
+
+          const url = image.image_url as string;
+
+          const fileName = url.split("/").pop()!;
+
+          const publicId =
+            `rooms/${fileName.split(".")[0]}`;
+
+          await cloudinary.uploader.destroy(publicId);
+
+        } catch (err) {
+
+          console.warn(
+            "Failed to delete Cloudinary image:",
+            err
+          );
+
+        }
+
+      }
+
+      // Delete DB records
+      await client.query(
+        `
+        DELETE
+        FROM room_images
+        WHERE room_id = $1
+        `,
+        [id]
+      );
+
+      // Upload new images
       for (const file of req.files as Express.Multer.File[]) {
-        const uploadResult: any = await new Promise(
-          (resolve, reject) => {
-            const stream = cloudinary.uploader.upload_stream(
-              {
-                folder: "rooms",
-              },
-              (error, result) => {
-                if (error) return reject(error);
-                resolve(result);
-              }
-            );
+
+        const uploadResult: any =
+          await new Promise((resolve, reject) => {
+
+            const stream =
+              cloudinary.uploader.upload_stream(
+                {
+                  folder: "rooms",
+                },
+                (error, result) => {
+
+                  if (error)
+                    return reject(error);
+
+                  resolve(result);
+
+                }
+              );
 
             stream.end(file.buffer);
-          }
-        );
+
+          });
 
         imageUrls.push(uploadResult.secure_url);
 
         await client.query(
           `
-            INSERT INTO room_images
-            (room_id, image_url)
-            VALUES ($1, $2)
-          `,
-          [updatedRoom.id, uploadResult.secure_url]
+          INSERT INTO room_images
+          (
+              room_id,
+              image_url
+          )
+          VALUES
+          ($1,$2)
+      `,
+          [
+            updatedRoom.id,
+            uploadResult.secure_url,
+          ]
         );
+
       }
+
     }
     await client.query("COMMIT");
 
@@ -578,11 +641,11 @@ export const updateRoomStatus = async (
     if (status === "Available") {
       const occupiedResult = await pool.query(
         `
-        SELECT COUNT(*) AS occupied
-        FROM room_assignments
-        WHERE room_id = $1
-          AND status = 'Active'
-        `,
+          SELECT COUNT(*) AS occupied
+          FROM room_assignments
+          WHERE room_id = $1
+            AND status = 'Active'
+          `,
         [id]
       );
 
@@ -602,11 +665,11 @@ export const updateRoomStatus = async (
 
     const result = await pool.query(
       `
-      UPDATE rooms
-      SET status = $1
-      WHERE id = $2
-      RETURNING *
-      `,
+        UPDATE rooms
+        SET status = $1
+        WHERE id = $2
+        RETURNING *
+        `,
       [status, id]
     );
 
@@ -638,18 +701,23 @@ export const deleteRoom = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Room not found" });
     }
 
-    const room = roomCheck.rows[0];
-
-
-    const occupiedBeds = await pool.query(
-      `SELECT COUNT(*) FROM beds 
-       WHERE room_id = $1 AND status = 'Occupied'`,
+    const activeAssignments = await pool.query(
+      `
+      SELECT
+          COUNT(*) AS total
+      FROM room_assignments
+      WHERE
+          room_id = $1
+      AND
+          status = 'Active'
+      `,
       [id]
     );
 
-    if (Number(occupiedBeds.rows[0].count) > 0) {
+    if (Number(activeAssignments.rows[0].total) > 0) {
       return res.status(400).json({
-        message: "Cannot delete room with occupied beds",
+        message:
+          "This room cannot be deleted because it currently has active boarder assignment(s).",
       });
     }
 
@@ -961,3 +1029,5 @@ export const getMyDashboard = async (
 
   }
 };
+
+
