@@ -954,7 +954,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
       [code, user.id]
     );
 
-    await resend.emails.send({
+  const response = await resend.emails.send({
       from: "E-Boarding <noreply@eboarding.site>",
       to: user.email,
       subject: "Your Password Reset Code",
@@ -1019,21 +1019,26 @@ export const forgotPassword = async (req: Request, res: Response) => {
         `
     });
 
+    console.log(response);
+
    return res.status(200).json({
       success: true,
       message: "Verification code sent successfully.",
     });
 
 
-  } catch (error) {
-    console.error("Forgot Password Error:", error);
+  } catch (error: any) {
+  console.error("Forgot Password Error:");
+  console.error(error);
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to send verification code.",
-    });
-
+  if (error.response) {
+    console.error(error.response);
   }
+
+  return res.status(500).json({
+    message: error.message || "Server error",
+  });
+}
 };
 
 
