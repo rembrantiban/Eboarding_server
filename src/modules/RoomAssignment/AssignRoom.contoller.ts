@@ -892,3 +892,131 @@ export const checkoutAssignment = async (
   }
 };
 
+export const getMyDashboard = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        message: "Unauthorized.",
+      });
+    }
+
+
+    const roomResult = await pool.query(
+      `
+      SELECT
+          r.room_number,
+          r.capacity,
+          r.price_per_month,
+
+          b.bed_number,
+
+          ra.assigned_date,
+
+          (
+              EXTRACT(YEAR FROM AGE(CURRENT_DATE, ra.assigned_date)) * 12
+              +
+              EXTRACT(MONTH FROM AGE(CURRENT_DATE, ra.assigned_date))
+          )::INT AS stay_months
+
+      FROM room_assignments ra
+
+      INNER JOIN rooms r
+          ON r.id = ra.room_id
+
+      INNER JOIN beds b
+          ON b.id = ra.bed_id
+
+      WHERE
+          ra.user_id = $1
+      AND
+          ra.status = 'Active'
+
+      LIMIT 1
+      `,
+      [userId]
+    );
+
+
+
+    const paymentResult = await pool.query(
+      `
+      SELECT
+          billing_no,
+          billing_type,
+          billing_month,
+          total_amount,
+          balance,
+          due_date,
+          status,
+
+          GREATEST(
+              due_date - CURRENT_DATE,
+              0
+          ) AS days_left
+
+      FROM billings
+
+      WHERE
+          user_id = $1
+      AND
+          status IN ('Pending','Partial')
+
+      ORDER BY due_date ASC
+
+      LIMIT 1
+      `,
+      [userId]
+    );
+
+    const room = roomResult.rows[0] ?? null;
+    const payment = paymentResult.rows[0] ?? null;
+
+    return res.status(200).json({
+      room: room
+        ? {
+            roomNumber: room.room_number,
+            bedNumber: room.bed_number,
+            capacity: room.capacity,
+          }
+        : null,
+
+      monthlyRate: room
+        ? Number(room.price_per_month)
+        : 0,
+
+      stay: room
+        ? {
+            months: Number(room.stay_months),
+            moveInDate: room.assigned_date,
+          }
+        : null,
+
+      upcomingPayment: payment
+        ? {
+            billingNo: payment.billing_no,
+            label: payment.billing_type,
+            billingMonth: payment.billing_month,
+            amount: Number(payment.total_amount),
+            balance: Number(payment.balance),
+            dueDate: payment.due_date,
+            daysLeft: Number(payment.days_left),
+            status: payment.status,
+          }
+        : null,
+    });
+
+  } catch (error) {
+
+    console.error("Get Dashboard Error:", error);
+
+    return res.status(500).json({
+      message: "Server error.",
+    });
+
+  }
+};
