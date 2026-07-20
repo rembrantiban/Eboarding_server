@@ -739,6 +739,8 @@ export const getOutstandingBalance = async (
             WHERE
                 user_id = $1
             AND
+                due_date <= CURRENT_DATE
+            AND
                 status IN
                 (
                     'Pending',
@@ -761,7 +763,6 @@ export const getOutstandingBalance = async (
 
     }
 };
-
 export const getActivePenalties = async (
     req: AuthRequest,
     res: Response
