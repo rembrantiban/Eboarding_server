@@ -1,4 +1,4 @@
-import { Response } from "express";
+import { Request, Response } from "express";
 import { pool } from "../../config/db";
 import { AuthRequest } from "../../types/auth";
 
@@ -7,20 +7,34 @@ export const createRule = async (
   req: AuthRequest,
   res: Response
 ) => {
-  const { title, description } = req.body;
+  const {
+    title,
+    description,
+    status = "Unpublished",
+  } = req.body;
+
   const userId = req.user?.id;
 
   try {
     const result = await pool.query(
       `
       INSERT INTO rules_and_regulations
-      (title, description, created_by)
-
-      VALUES ($1, $2, $3)
-
+      (
+        title,
+        description,
+        status,
+        created_by
+      )
+      VALUES
+      ($1,$2,$3,$4)
       RETURNING *
       `,
-      [title, description, userId]
+      [
+        title,
+        description,
+        status,
+        userId,
+      ]
     );
 
     res.status(201).json({
@@ -37,12 +51,12 @@ export const createRule = async (
   }
 };
 
-
 export const getRules = async (
   req: AuthRequest,
   res: Response
 ) => {
   try {
+
     const result = await pool.query(
       `
       SELECT
@@ -53,9 +67,7 @@ export const getRules = async (
       FROM rules_and_regulations r
 
       LEFT JOIN users u
-      ON r.created_by = u.id
-
-      WHERE r.is_active = TRUE
+        ON r.created_by = u.id
 
       ORDER BY r.created_at DESC
       `
@@ -64,11 +76,48 @@ export const getRules = async (
     res.json(result.rows);
 
   } catch (error) {
+
     console.error("Get rules error:", error);
 
     res.status(500).json({
       message: "Server error",
     });
+
+  }
+};
+
+export const getPublishedRules = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+
+    const result = await pool.query(
+      `
+      SELECT
+        id,
+        title,
+        description,
+        created_at
+
+      FROM rules_and_regulations
+
+      WHERE status = 'Published'
+
+      ORDER BY created_at DESC
+      `
+    );
+
+    res.json(result.rows);
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      message: "Server error",
+    });
+
   }
 };
 
@@ -76,15 +125,17 @@ export const updateRule = async (
   req: AuthRequest,
   res: Response
 ) => {
+
   const { id } = req.params;
 
   const {
     title,
     description,
-    is_active,
+    status,
   } = req.body;
 
   try {
+
     const result = await pool.query(
       `
       UPDATE rules_and_regulations
@@ -92,14 +143,19 @@ export const updateRule = async (
       SET
         title = $1,
         description = $2,
-        is_active = $3,
+        status = $3,
         updated_at = CURRENT_TIMESTAMP
 
       WHERE id = $4
 
       RETURNING *
       `,
-      [title, description, is_active, id]
+      [
+        title,
+        description,
+        status,
+        id,
+      ]
     );
 
     if (result.rowCount === 0) {
@@ -114,14 +170,15 @@ export const updateRule = async (
     });
 
   } catch (error) {
-    console.error("Update rule error:", error);
+
+    console.error(error);
 
     res.status(500).json({
       message: "Server error",
     });
+
   }
 };
-
 
 export const deleteRule = async (
   req: AuthRequest,
@@ -154,6 +211,84 @@ export const deleteRule = async (
 
     res.status(500).json({
       message: "Server error",
+    });
+  }
+};
+
+export const publishRule = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      `
+      UPDATE rules_and_regulations
+      SET
+        status = 'Published',
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+      RETURNING *
+      `,
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        message: "Rule not found.",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Rule published successfully.",
+      rule: result.rows[0],
+    });
+
+  } catch (error) {
+    console.error("Publish rule error:", error);
+
+    return res.status(500).json({
+      message: "Server error.",
+    });
+  }
+};
+
+export const unpublishRule = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      `
+      UPDATE rules_and_regulations
+      SET
+        status = 'Unpublished',
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+      RETURNING *
+      `,
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        message: "Rule not found.",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Rule unpublished successfully.",
+      rule: result.rows[0],
+    });
+
+  } catch (error) {
+    console.error("Unpublish rule error:", error);
+
+    return res.status(500).json({
+      message: "Server error.",
     });
   }
 };
