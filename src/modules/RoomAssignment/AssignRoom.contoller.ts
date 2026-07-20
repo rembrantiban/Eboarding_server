@@ -1020,3 +1020,60 @@ export const getMyDashboard = async (
 
   }
 };
+
+
+export const getUpcomingPayments = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    const userId = req.user?.id;
+
+    const result = await pool.query(
+      `
+      SELECT
+          b.id,
+          b.billing_no,
+          b.billing_month,
+          b.due_date,
+          b.total_amount,
+          b.paid_amount,
+          b.balance,
+          b.status,
+
+          CASE
+              WHEN b.due_date < CURRENT_DATE THEN
+                  'Overdue'
+              WHEN b.due_date = CURRENT_DATE THEN
+                  'Due Today'
+              ELSE
+                  'Due in ' ||
+                  (b.due_date - CURRENT_DATE) ||
+                  ' days'
+          END AS due_label
+
+      FROM billings b
+
+      WHERE
+          b.user_id = $1
+      AND
+          b.status IN ('Pending','Partial')
+
+      ORDER BY
+          b.due_date ASC
+      `,
+      [userId]
+    );
+
+    return res.json(result.rows);
+
+  } catch (err) {
+
+    console.error(err);
+
+    return res.status(500).json({
+      message: "Server error."
+    });
+
+  }
+};

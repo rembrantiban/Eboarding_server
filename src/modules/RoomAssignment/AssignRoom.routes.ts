@@ -6,6 +6,7 @@ import { assignRoom,
        getOccupancyHistory,
        getBoarderAssignedRoom,
        getMyDashboard,
+       getUpcomingPayments,
  } from "./AssignRoom.contoller"
 import express from "express"
 import { checkAuth } from "../../middleware/checkAuth";
@@ -20,6 +21,7 @@ router.get("/occupancy-history", checkAuth, getOccupancyHistory);
 router.put("/transfer/:id", checkAuth, transferAssignment);
 router.get("/boarder-assigned-room/:id", checkAuth, getBoarderAssignedRoom);
 router.get("/dashboard-stats", checkAuth, getMyDashboard);
+router.get("/get-my-upcoming-payments", checkAuth, getUpcomingPayments);
 
 
 export default router;
