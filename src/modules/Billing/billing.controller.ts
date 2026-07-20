@@ -40,6 +40,7 @@ export const recordPayment = async (
             SELECT
                 b.*,
                 ra.room_id,
+                 ra.bed_id,
                 ra.status AS assignment_status
             FROM billings b
             LEFT JOIN room_assignments ra
@@ -195,7 +196,9 @@ export const recordPayment = async (
                     userId: billing.user_id,
                     assignmentId: billing.assignment_id,
                     roomId: billing.room_id,
+                     bedId: billing.bed_id,
                     billingMonth: nextMonth,
+
                 });
 
             } else {

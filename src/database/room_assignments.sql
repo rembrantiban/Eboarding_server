@@ -33,6 +33,15 @@ CREATE TABLE room_assignments (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+ALTER TABLE room_assignments
+DROP CONSTRAINT room_assignments_room_id_fkey;
+
+ALTER TABLE room_assignments
+ADD CONSTRAINT room_assignments_room_id_fkey
+FOREIGN KEY (room_id)
+REFERENCES rooms(id)
+ON DELETE CASCADE;
+
 CREATE INDEX idx_room_assignments_user
 ON room_assignments(user_id);
 

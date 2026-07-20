@@ -4,7 +4,9 @@ interface CreateMonthlyBillingParams {
     userId: number;
     assignmentId: number;
     roomId: number;
+    bedId: number;          // NEW
     billingMonth?: Date;
+
 }
 
 export const createMonthlyBilling = async (
@@ -15,21 +17,30 @@ export const createMonthlyBilling = async (
     //----------------------------------------------------
     // Get Room Monthly Fee
     //----------------------------------------------------
-
     const room = await client.query(
         `
-        SELECT price_per_month
-        FROM rooms
-        WHERE id = $1
+        SELECT
+            r.room_number,
+            r.price_per_month,
+            b.bed_number
+        FROM rooms r
+        INNER JOIN beds b
+            ON b.id = $2
+        WHERE r.id = $1
         `,
-        [data.roomId]
+        [
+            data.roomId,
+            data.bedId,
+        ]
     );
 
     if (room.rowCount === 0) {
         throw new Error("Room not found.");
     }
 
-    const roomFee = Number(room.rows[0].price_per_month);
+    const roomData = room.rows[0];
+
+    const roomFee = Number(roomData.price_per_month);
 
     //----------------------------------------------------
     // Billing Month
@@ -116,6 +127,10 @@ export const createMonthlyBilling = async (
             billing_no,
             user_id,
             assignment_id,
+
+             room_number,
+             bed_number,
+    
             billing_type,
             billing_month,
             due_date,
@@ -133,7 +148,7 @@ export const createMonthlyBilling = async (
         (
             $1,$2,$3,$4,$5,$6,
             $7,$8,$9,$10,$11,
-            $12,$13,$14,$15
+            $12,$13,$14,$15, $16, $17
         )
         RETURNING *
         `,
@@ -141,14 +156,20 @@ export const createMonthlyBilling = async (
             billingNo,
             data.userId,
             data.assignmentId,
+
+            roomData.room_number,
+            roomData.bed_number,
+
             "Monthly Rent",
             billingMonth,
             dueDate,
+
             roomFee,
             utilitiesFee,
             otherCharges,
             discount,
             lateFee,
+
             totalAmount,
             paidAmount,
             balance,

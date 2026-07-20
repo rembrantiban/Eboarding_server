@@ -2,7 +2,7 @@ import { Request, Response } from "express"
 import { pool } from "../../config/db"
 import { AuthRequest } from "../../types/auth";
 import { updateRoomStatus } from "./roomAssignment.helper";
-import { createMonthlyBilling  } from "../Billing/billing.helper";
+import { createMonthlyBilling } from "../Billing/billing.helper";
 
 
 export const assignRoom = async (
@@ -214,6 +214,7 @@ export const assignRoom = async (
       userId: user_id,
       assignmentId: assignment.id,
       roomId: room_id,
+      bedId: bed_id,
     });
 
     // ============================
@@ -390,93 +391,95 @@ export const transferAssignment = async (
     const newAssignment = newAssignmentResult.rows[0];
 
     const roomResult = await client.query(
-  `
-  SELECT price_per_month
-  FROM rooms
-  WHERE id = $1
+      `
+    SELECT price_per_month
+    FROM rooms
+    WHERE id = $1
+    `,
+      [room_id]
+    );
+
+    if (roomResult.rowCount === 0) {
+      throw new Error("Room not found.");
+    }
+
+    const roomFee = Number(roomResult.rows[0].price_per_month);
+
+    // ============================
+    // FIND CURRENT UNPAID BILLING
+    // ============================
+
+    const billingResult = await client.query(
+      `
+      SELECT
+          id,
+          paid_amount,
+          utilities_fee,
+          other_charges,
+          discount,
+          late_fee
+      FROM billings
+      WHERE
+          assignment_id = $1
+      AND
+          status IN ('Pending', 'Partial')
+      ORDER BY created_at DESC
+      LIMIT 1
   `,
-  [room_id]
-);
+      [current.id]
+    );
 
-if (roomResult.rowCount === 0) {
-  throw new Error("Room not found.");
-}
+    // ============================
+    // MOVE BILLING TO NEW ASSIGNMENT
+    // ============================
 
-const roomFee = Number(roomResult.rows[0].price_per_month);
+    if (billingResult.rowCount! > 0) {
 
-// ============================
-// FIND CURRENT UNPAID BILLING
-// ============================
+      const billing = billingResult.rows[0];
 
-const billingResult = await client.query(
-  `
-  SELECT
-      id,
-      paid_amount,
-      utilities_fee,
-      other_charges,
-      discount,
-      late_fee
-  FROM billings
-  WHERE
-      assignment_id = $1
-  AND
-      status IN ('Pending', 'Partial')
-  ORDER BY created_at DESC
-  LIMIT 1
-  `,
-  [current.id]
-);
+      const totalAmount =
+        roomFee +
+        Number(billing.utilities_fee) +
+        Number(billing.other_charges) +
+        Number(billing.late_fee) -
+        Number(billing.discount);
 
-// ============================
-// MOVE BILLING TO NEW ASSIGNMENT
-// ============================
+      const balance =
+        totalAmount - Number(billing.paid_amount);
 
-if (billingResult.rowCount! > 0) {
+      let status = "Pending";
 
-  const billing = billingResult.rows[0];
+      if (balance <= 0) {
+        status = "Paid";
+      } else if (Number(billing.paid_amount) > 0) {
+        status = "Partial";
+      }
 
-  const totalAmount =
-    roomFee +
-    Number(billing.utilities_fee) +
-    Number(billing.other_charges) +
-    Number(billing.late_fee) -
-    Number(billing.discount);
-
-  const balance =
-    totalAmount - Number(billing.paid_amount);
-
-  let status = "Pending";
-
-  if (balance <= 0) {
-    status = "Paid";
-  } else if (Number(billing.paid_amount) > 0) {
-    status = "Partial";
-  }
-
-  await client.query(
-    `
+      await client.query(
+        `
     UPDATE billings
     SET
         assignment_id = $1,
-        room_fee = $2,
-        total_amount = $3,
-        balance = $4,
-        status = $5,
+        room_number = $2,
+        bed_number = $3,
+        room_fee = $4,
+        total_amount = $5,
+        balance = $6,
+        status = $7,
         updated_at = NOW()
-    WHERE id = $6
+    WHERE id = $8
     `,
-    [
-      newAssignment.id,
-      roomFee,
-      totalAmount,
-      balance,
-      status,
-      billing.id,
-    ]
-  );
+        [
+          newAssignment.id,
+          roomFee,
+          totalAmount,
+          balance,
+          status,
+          billing.id,
+        ]
+      );
 
-}
+    }
 
     await client.query("COMMIT");
 
@@ -573,16 +576,16 @@ export const getAssignedBoarders = async (
 };
 
 export const getBoarderAssignedRoom = async (
-    req: Request,
-    res: Response
+  req: Request,
+  res: Response
 ) => {
 
-    try {
+  try {
 
-        const { id } = req.params;
+    const { id } = req.params;
 
-        const result = await pool.query(
-            `
+    const result = await pool.query(
+      `
             SELECT
 
                 ra.id AS assignment_id,
@@ -658,31 +661,31 @@ export const getBoarderAssignedRoom = async (
 
             LIMIT 1
             `,
-            [id]
-        );
+      [id]
+    );
 
-        if (result.rowCount === 0) {
+    if (result.rowCount === 0) {
 
-            return res.status(404).json({
-                message: "Boarder has no active room assignment.",
-            });
-
-        }
-
-        return res.status(200).json(result.rows[0]);
-
-    } catch (error) {
-
-        console.error(
-            "Get Boarder Assigned Room Error:",
-            error
-        );
-
-        return res.status(500).json({
-            message: "Server error.",
-        });
+      return res.status(404).json({
+        message: "Boarder has no active room assignment.",
+      });
 
     }
+
+    return res.status(200).json(result.rows[0]);
+
+  } catch (error) {
+
+    console.error(
+      "Get Boarder Assigned Room Error:",
+      error
+    );
+
+    return res.status(500).json({
+      message: "Server error.",
+    });
+
+  }
 
 };
 
@@ -979,10 +982,10 @@ export const getMyDashboard = async (
     return res.status(200).json({
       room: room
         ? {
-            roomNumber: room.room_number,
-            bedNumber: room.bed_number,
-            capacity: room.capacity,
-          }
+          roomNumber: room.room_number,
+          bedNumber: room.bed_number,
+          capacity: room.capacity,
+        }
         : null,
 
       monthlyRate: room
@@ -991,22 +994,22 @@ export const getMyDashboard = async (
 
       stay: room
         ? {
-            months: Number(room.stay_months),
-            moveInDate: room.assigned_date,
-          }
+          months: Number(room.stay_months),
+          moveInDate: room.assigned_date,
+        }
         : null,
 
       upcomingPayment: payment
         ? {
-            billingNo: payment.billing_no,
-            label: payment.billing_type,
-            billingMonth: payment.billing_month,
-            amount: Number(payment.total_amount),
-            balance: Number(payment.balance),
-            dueDate: payment.due_date,
-            daysLeft: Number(payment.days_left),
-            status: payment.status,
-          }
+          billingNo: payment.billing_no,
+          label: payment.billing_type,
+          billingMonth: payment.billing_month,
+          amount: Number(payment.total_amount),
+          balance: Number(payment.balance),
+          dueDate: payment.due_date,
+          daysLeft: Number(payment.days_left),
+          status: payment.status,
+        }
         : null,
     });
 
