@@ -485,28 +485,33 @@ export const updateRoom = async (req: Request, res: Response) => {
       updatedRoom = updateResult.rows[0];
     }
 
-    const imageUrls: string[] = [];
+   const imageUrls: string[] = [];
 
-    if (Array.isArray(req.files) && req.files.length > 0) {
+    // Images that should remain
+    const existingImages: string[] =
+      req.body.existingImages
+        ? JSON.parse(req.body.existingImages)
+        : [];
 
-      // Get old images
-      const oldImages = await client.query(
-        `
-    SELECT image_url
-    FROM room_images
-    WHERE room_id = $1
-    `,
-        [id]
-      );
+    // Current DB images
+    const dbImages = await client.query(
+      `
+      SELECT id, image_url
+      FROM room_images
+      WHERE room_id = $1
+      `,
+      [id]
+    );
 
-      // Delete from Cloudinary
-      for (const image of oldImages.rows) {
+    // Delete removed images
+    for (const image of dbImages.rows) {
+
+      if (!existingImages.includes(image.image_url)) {
 
         try {
 
-          const url = image.image_url as string;
-
-          const fileName = url.split("/").pop()!;
+          const fileName =
+            image.image_url.split("/").pop()!;
 
           const publicId =
             `rooms/${fileName.split(".")[0]}`;
@@ -516,25 +521,26 @@ export const updateRoom = async (req: Request, res: Response) => {
         } catch (err) {
 
           console.warn(
-            "Failed to delete Cloudinary image:",
+            "Cloudinary delete failed:",
             err
           );
 
         }
 
+        await client.query(
+          `
+          DELETE FROM room_images
+          WHERE id = $1
+          `,
+          [image.id]
+        );
+
       }
 
-      // Delete DB records
-      await client.query(
-        `
-        DELETE
-        FROM room_images
-        WHERE room_id = $1
-        `,
-        [id]
-      );
+    }
+    // Upload new images
+    if (Array.isArray(req.files)) {
 
-      // Upload new images
       for (const file of req.files as Express.Multer.File[]) {
 
         const uploadResult: any =
@@ -547,8 +553,7 @@ export const updateRoom = async (req: Request, res: Response) => {
                 },
                 (error, result) => {
 
-                  if (error)
-                    return reject(error);
+                  if (error) return reject(error);
 
                   resolve(result);
 
@@ -565,12 +570,12 @@ export const updateRoom = async (req: Request, res: Response) => {
           `
           INSERT INTO room_images
           (
-              room_id,
-              image_url
+            room_id,
+            image_url
           )
           VALUES
           ($1,$2)
-      `,
+          `,
           [
             updatedRoom.id,
             uploadResult.secure_url,
@@ -580,12 +585,26 @@ export const updateRoom = async (req: Request, res: Response) => {
       }
 
     }
+
     await client.query("COMMIT");
+
+    const updatedImages = await client.query(
+      `
+      SELECT image_url
+      FROM room_images
+      WHERE room_id = $1
+      `,
+      [id]
+    );
 
     return res.json({
       message: "Room updated successfully",
-      room: updatedRoom,
-      images: imageUrls,
+      room: {
+        ...updatedRoom,
+        images: updatedImages.rows.map(
+          (i) => i.image_url
+        ),
+      },
     });
   } catch (error: any) {
     await client.query("ROLLBACK");
