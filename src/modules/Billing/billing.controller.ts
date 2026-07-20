@@ -198,7 +198,6 @@ export const recordPayment = async (
                     roomId: billing.room_id,
                      bedId: billing.bed_id,
                     billingMonth: nextMonth,
-
                 });
 
             } else {

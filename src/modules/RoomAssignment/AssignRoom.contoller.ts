@@ -223,9 +223,46 @@ export const assignRoom = async (
 
     await client.query("COMMIT");
 
+    const assignmentDetails = await client.query(
+      `
+        SELECT
+            ra.id,
+            ra.user_id,
+            ra.room_id,
+            ra.bed_id,
+            ra.status,
+            ra.assigned_date,
+            ra.expected_checkout,
+            ra.actual_checkout,
+            ra.remarks,
+
+            u.first_name,
+            u.last_name,
+            u.email,
+
+            r.room_number,
+
+            b.bed_number
+
+        FROM room_assignments ra
+
+        JOIN users u
+            ON u.id = ra.user_id
+
+        JOIN rooms r
+            ON r.id = ra.room_id
+
+        JOIN beds b
+            ON b.id = ra.bed_id
+
+        WHERE ra.id = $1
+        `,
+      [assignment.id]
+);
+
     return res.status(201).json({
       message: "Room assigned successfully.",
-      assignment,
+      assignment: assignmentDetails.rows[0],
     });
 
   } catch (error) {
