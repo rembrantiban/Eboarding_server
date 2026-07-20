@@ -763,6 +763,8 @@ export const getOutstandingBalance = async (
 
     }
 };
+
+
 export const getActivePenalties = async (
     req: AuthRequest,
     res: Response
