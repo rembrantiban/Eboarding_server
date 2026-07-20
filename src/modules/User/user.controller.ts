@@ -912,28 +912,50 @@ export const forgotPassword = async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
 
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required.",
+      });
+    }
+
     const result = await pool.query(
-      "SELECT * FROM users WHERE email = $1",
+      `
+      SELECT
+        id,
+        email
+      FROM users
+      WHERE email = $1
+      `,
       [email]
     );
 
-    if (result.rows.length === 0) {
-      return res.json({ message: "If email exists, code sent" });
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No account found with this email address.",
+      });
     }
 
     const user = result.rows[0];
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const code = Math.floor(
+      100000 + Math.random() * 900000
+    ).toString();
 
     await pool.query(
-      `UPDATE users 
-       SET reset_code=$1, reset_code_expiry=NOW() + INTERVAL '10 minutes'
-       WHERE id=$2`,
+      `
+      UPDATE users
+      SET
+        reset_code = $1,
+        reset_code_expiry = NOW() + INTERVAL '10 minutes'
+      WHERE id = $2
+      `,
       [code, user.id]
     );
 
     await resend.emails.send({
-      from: "Eboarding <noreply@eboarding.site>",
+      from: "E-Boarding <noreply@eboarding.site>",
       to: user.email,
       subject: "Your Password Reset Code",
       html: `
@@ -997,11 +1019,20 @@ export const forgotPassword = async (req: Request, res: Response) => {
         `
     });
 
-    res.json({ message: "Code sent successfully" });
+   return res.status(200).json({
+      success: true,
+      message: "Verification code sent successfully.",
+    });
+
 
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
+    console.error("Forgot Password Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to send verification code.",
+    });
+
   }
 };
 
