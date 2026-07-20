@@ -721,3 +721,89 @@ export const getPaymentHistory = async (
 
     }
 };
+
+export const getOutstandingBalance = async (
+    req: AuthRequest,
+    res: Response
+) => {
+    try {
+
+        const userId = req.user?.id;
+
+        const result = await pool.query(
+            `
+            SELECT
+                COALESCE(SUM(balance), 0) AS outstanding_balance,
+                COUNT(*) AS pending_count
+            FROM billings
+            WHERE
+                user_id = $1
+            AND
+                status IN
+                (
+                    'Pending',
+                    'Partial',
+                    'Overdue'
+                )
+            `,
+            [userId]
+        );
+
+        return res.status(200).json(result.rows[0]);
+
+    } catch (error) {
+
+        console.error("Outstanding Balance Error:", error);
+
+        return res.status(500).json({
+            message: "Server error."
+        });
+
+    }
+};
+
+export const getActivePenalties = async (
+    req: AuthRequest,
+    res: Response
+) => {
+    try {
+
+        const userId = req.user?.id;
+
+        const result = await pool.query(
+            `
+            SELECT
+                id,
+                billing_no,
+                billing_month,
+                due_date,
+                late_fee
+            FROM billings
+            WHERE
+                user_id = $1
+            AND
+                late_fee > 0
+            AND
+                status IN
+                (
+                    'Pending',
+                    'Partial',
+                    'Overdue'
+                )
+            ORDER BY due_date ASC
+            `,
+            [userId]
+        );
+
+        return res.status(200).json(result.rows);
+
+    } catch (error) {
+
+        console.error("Get Active Penalties:", error);
+
+        return res.status(500).json({
+            message: "Server error.",
+        });
+
+    }
+};
