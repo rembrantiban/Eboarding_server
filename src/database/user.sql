@@ -58,6 +58,8 @@ emergency_contact_name VARCHAR(100),
   NOT NULL
   DEFAULT 'Active'
   CHECK (account_status IN ('Active', 'Deactivate')),
+  reset_code VARCHAR(10),
+  reset_code_expiry TIMESTAMP
   
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
