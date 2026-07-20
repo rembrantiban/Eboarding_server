@@ -684,12 +684,14 @@ export const getAvailableBoarders = async (
         u.user_type = 'Boarder'
         AND u.status = 'Approved'
         AND u.account_status = 'Active'
+        AND u.valid_id_status = 'Approved'
 
         AND NOT EXISTS (
           SELECT 1
           FROM room_assignments ra
-          WHERE ra.user_id = u.id
-          AND ra.status = 'Active'
+          WHERE
+            ra.user_id = u.id
+            AND ra.status = 'Active'
         )
 
       ORDER BY
