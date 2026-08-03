@@ -84,7 +84,7 @@ export const register = async (req: Request, res: Response) => {
       );
 
       validIdImage = uploadResult.secure_url;
-      
+
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -174,15 +174,27 @@ export const login = async (req: Request, res: Response) => {
     const { identifier, password } = req.body;
 
     const result = await pool.query(
-      "SELECT * FROM users WHERE email = $1 OR username = $1",
+        `
+        SELECT *
+        FROM users
+        WHERE email = $1 OR username = $1
+        `,
       [identifier]
     );
 
     if (result.rows.length === 0) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(404).json({
+        message: "User not found",
+      });
     }
 
     const user = result.rows[0];
+
+    if (user.is_deleted) {
+      return res.status(403).json({
+        message: "This account is no longer available.",
+      });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
 
@@ -409,7 +421,6 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
   }
 };
 
-
 export const createUserByStaff = async (req: Request, res: Response) => {
   try {
     const {
@@ -597,53 +608,55 @@ export const getAllUsers = async (
     }
 
     const query = `
-      SELECT
-        u.id,
-        u.user_id_no,
-        u.first_name,
-        u.last_name,
-        u.email,
-        u.username,
-        u.contact_number,
-        u.address,
-        u.avatar_url,
+        SELECT
+          u.id,
+          u.user_id_no,
+          u.first_name,
+          u.last_name,
+          u.email,
+          u.username,
+          u.contact_number,
+          u.address,
+          u.avatar_url,
 
-        u.gender,
-        u.age,
-        u.valid_id_image,
-        u.valid_id_status,
-        u.emergency_contact_name,
-        u.emergency_contact_number,
-        u.emergency_contact_relationship,
+          u.gender,
+          u.age,
+          u.valid_id_image,
+          u.valid_id_status,
+          u.emergency_contact_name,
+          u.emergency_contact_number,
+          u.emergency_contact_relationship,
 
-        u.user_type,
-        u.status,
-        u.account_status,
+          u.user_type,
+          u.status,
+          u.account_status,
 
-        u.created_at,
-        u.updated_at,
+          u.created_at,
+          u.updated_at,
 
-        (b.id IS NOT NULL) AS is_assigned,
+          (b.id IS NOT NULL) AS is_assigned,
 
-        r.room_number,
-        bed.bed_number
+          r.room_number,
+          bed.bed_number
 
-      FROM users u
+        FROM users u
 
-      LEFT JOIN boarders b
-        ON b.user_id = u.id
-        AND b.status = 'Active'
+        LEFT JOIN boarders b
+          ON b.user_id = u.id
+          AND b.status = 'Active'
 
-      LEFT JOIN rooms r
-        ON b.room_id = r.id
+        LEFT JOIN rooms r
+          ON b.room_id = r.id
 
-      LEFT JOIN beds bed
-        ON b.bed_id = bed.id
+        LEFT JOIN beds bed
+          ON b.bed_id = bed.id
 
-      WHERE ${userFilter}
+        WHERE
+          ${userFilter}
+          AND u.is_deleted = FALSE
 
-      ORDER BY u.created_at DESC
-    `;
+        ORDER BY u.created_at DESC
+      `;
 
     const result = await pool.query(query);
 
@@ -710,32 +723,123 @@ export const getAvailableBoarders = async (
   }
 };
 
-export const deleteUserAccount = async (req: Request, res: Response) => {
+export const deleteUserAccount = async (
+  req: AuthRequest,
+  res: Response
+) => {
   try {
     const { id } = req.params;
 
     const userCheck = await pool.query(
-      "SELECT * FROM users WHERE id = $1",
+      "SELECT * FROM users WHERE id = $1 AND is_deleted = FALSE",
       [id]
     );
 
     if (userCheck.rows.length === 0) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({
+        message: "User not found",
+      });
     }
 
     const user = userCheck.rows[0];
 
     if (user.user_type === "Admin") {
-      return res.status(403).json({ message: "Cannot delete Admin account" });
+      return res.status(403).json({
+        message: "Cannot delete Admin account",
+      });
     }
 
-    await pool.query("DELETE FROM users WHERE id = $1", [id]);
+    await pool.query(
+      `
+      UPDATE users
+      SET
+          is_deleted = TRUE,
+          deleted_at = NOW(),
+          deleted_by = $2
+      WHERE id = $1
+      `,
+      [id, req.user?.id]
+    );
 
-    res.json({ message: "User deleted successfully" });
+    return res.status(200).json({
+      message: "User archived successfully.",
+    });
 
   } catch (error) {
     console.error("Delete user error:", error);
-    res.status(500).json({ message: "Server error" });
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
+
+export const getAllDeletedUserAccounts = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    const currentUserType = req.user?.user_type;
+
+    let userFilter = "";
+
+    if (currentUserType === "Admin") {
+      userFilter = `u.user_type != 'Admin'`;
+    } else if (currentUserType === "Staff") {
+      userFilter = `u.user_type = 'Boarder'`;
+    } else {
+      return res.status(403).json({
+        message: "Access denied",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        u.id,
+        u.user_id_no,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.username,
+        u.contact_number,
+        u.address,
+        u.avatar_url,
+        u.gender,
+        u.age,
+        u.valid_id_image,
+        u.valid_id_status,
+        u.user_type,
+        u.status,
+        u.account_status,
+        u.deleted_at,
+
+        admin.first_name || ' ' || admin.last_name AS deleted_by_name
+
+      FROM users u
+
+      LEFT JOIN users admin
+        ON admin.id = u.deleted_by
+
+      WHERE
+        ${userFilter}
+        AND u.is_deleted = TRUE
+
+      ORDER BY u.deleted_at DESC
+      `
+    );
+
+    return res.status(200).json({
+      users: result.rows,
+      total: result.rows.length,
+    });
+
+  } catch (error) {
+    console.error("Get deleted users error:", error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
   }
 };
 
@@ -954,7 +1058,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
       [code, user.id]
     );
 
-  const response = await resend.emails.send({
+    const response = await resend.emails.send({
       from: "E-Boarding <noreply@eboarding.site>",
       to: user.email,
       subject: "Your Password Reset Code",
@@ -1021,26 +1125,83 @@ export const forgotPassword = async (req: Request, res: Response) => {
 
     console.log(response);
 
-   return res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Verification code sent successfully.",
     });
 
 
   } catch (error: any) {
-  console.error("Forgot Password Error:");
-  console.error(error);
+    console.error("Forgot Password Error:");
+    console.error(error);
 
-  if (error.response) {
-    console.error(error.response);
+    if (error.response) {
+      console.error(error.response);
+    }
+
+    return res.status(500).json({
+      message: error.message || "Server error",
+    });
   }
-
-  return res.status(500).json({
-    message: error.message || "Server error",
-  });
-}
 };
 
+export const recoverDeletedUserAccount = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    const { id } = req.params;
+
+    const userCheck = await pool.query(
+      `
+      SELECT *
+      FROM users
+      WHERE id = $1
+      AND is_deleted = TRUE
+      `,
+      [id]
+    );
+
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({
+        message: "Deleted user not found.",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE users
+      SET
+        is_deleted = FALSE,
+        deleted_at = NULL,
+        deleted_by = NULL,
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING
+        id,
+        user_id_no,
+        first_name,
+        last_name,
+        email,
+        username,
+        user_type
+      `,
+      [id]
+    );
+
+    return res.status(200).json({
+      message: "User account recovered successfully.",
+      user: result.rows[0],
+    });
+
+  } catch (error) {
+    console.error("Recover user error:", error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
 
 export const resetPassword = async (req: Request, res: Response) => {
   try {
@@ -1092,7 +1253,6 @@ export const checkAuthenticated = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-
 
 export const countTotalBoarders = async (req: Request, res: Response) => {
   try {

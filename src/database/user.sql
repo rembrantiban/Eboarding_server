@@ -60,6 +60,9 @@ emergency_contact_name VARCHAR(100),
   CHECK (account_status IN ('Active', 'Deactivate')),
   reset_code VARCHAR(10),
   reset_code_expiry TIMESTAMP
+  is_deleted BOOLEAN DEFAULT FALSE,
+  deleted_at TIMESTAMP,
+  deleted_by INT,
   
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
