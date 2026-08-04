@@ -815,6 +815,7 @@ export const getAllDeletedUserAccounts = async (
         u.deleted_at,
 
         admin.first_name || ' ' || admin.last_name AS deleted_by_name
+        admin.avatar_url AS deleted_by_avatar
 
       FROM users u
 
@@ -1201,7 +1202,7 @@ export const recoverDeletedUserAccount = async (
       message: "Server error",
     });
   }
-};
+}
 
 export const resetPassword = async (req: Request, res: Response) => {
   try {
