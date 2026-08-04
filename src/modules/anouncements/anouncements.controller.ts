@@ -286,15 +286,18 @@ export const getUserAnnouncements = async (
     const userId = req.user?.id;
     const userType = req.user?.user_type;
 
-    let audienceFilter = "'All'";
-
-    if (userType === "Boarder") {
-      audienceFilter = "'All', 'Boarders'";
-    } else if (userType === "Staff") {
-      audienceFilter = "'All', 'Staff'";
-    } else if (userType === "Admin") {
-      audienceFilter = "'All', 'Staff'";
+    if (!userId || !userType) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
     }
+
+    const audience =
+      userType === "Boarder"
+        ? "Boarders"
+        : userType === "Staff"
+        ? "Staff"
+        : "All";
 
     const result = await pool.query(
       `
@@ -332,11 +335,14 @@ export const getUserAnnouncements = async (
 
       WHERE
         an.user_id = $1
-        AND a.audience IN (${audienceFilter})
+        AND (
+          a.audience = 'All'
+          OR a.audience = $2
+        )
 
       ORDER BY a.created_at DESC
       `,
-      [userId]
+      [userId, audience]
     );
 
     return res.json(result.rows);
@@ -349,32 +355,56 @@ export const getUserAnnouncements = async (
     });
   }
 };
+
 export const getUnreadCount = async (
   req: AuthRequest,
   res: Response
 ) => {
   try {
     const userId = req.user?.id;
+    const userType = req.user?.user_type;
+
+    if (!userId || !userType) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
+    const audience =
+      userType === "Boarder"
+        ? "Boarders"
+        : userType === "Staff"
+        ? "Staff"
+        : "All";
 
     const result = await pool.query(
       `
       SELECT COUNT(*) AS unread
-      FROM announcement_notifications
+
+      FROM announcement_notifications an
+
+      JOIN announcements a
+        ON a.id = an.announcement_id
+
       WHERE
-        user_id = $1
-        AND is_read = FALSE
+        an.user_id = $1
+        AND an.is_read = FALSE
+        AND (
+          a.audience = 'All'
+          OR a.audience = $2
+        )
       `,
-      [userId]
+      [userId, audience]
     );
 
-    res.json({
+    return res.json({
       unread: Number(result.rows[0].unread),
     });
 
   } catch (error) {
     console.error(error);
 
-    res.status(500).json({
+    return res.status(500).json({
       message: "Error fetching unread count",
     });
   }
