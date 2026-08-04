@@ -284,6 +284,17 @@ export const getUserAnnouncements = async (
 ) => {
   try {
     const userId = req.user?.id;
+    const userType = req.user?.user_type;
+
+    let audienceFilter = "'All'";
+
+    if (userType === "Boarder") {
+      audienceFilter = "'All', 'Boarders'";
+    } else if (userType === "Staff") {
+      audienceFilter = "'All', 'Staff'";
+    } else if (userType === "Admin") {
+      audienceFilter = "'All', 'Staff'";
+    }
 
     const result = await pool.query(
       `
@@ -305,7 +316,7 @@ export const getUserAnnouncements = async (
           ' ',
           u.last_name
         ) AS created_by_name,
-        
+
         u.avatar_url AS created_by_avatar,
 
         a.created_at,
@@ -321,7 +332,7 @@ export const getUserAnnouncements = async (
 
       WHERE
         an.user_id = $1
-        AND a.audience IN ('All', 'Boarders')
+        AND a.audience IN (${audienceFilter})
 
       ORDER BY a.created_at DESC
       `,
@@ -338,7 +349,6 @@ export const getUserAnnouncements = async (
     });
   }
 };
-
 export const getUnreadCount = async (
   req: AuthRequest,
   res: Response
