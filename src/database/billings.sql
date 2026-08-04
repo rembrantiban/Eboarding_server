@@ -18,6 +18,7 @@ CREATE TABLE billings (
     balance DECIMAL(10, 2) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'Pending' CHECK (
         status IN (
+            'Upcoming',
             'Pending',
             'Partial',
             'Paid',

@@ -310,6 +310,7 @@ export const getAllBillings = async (
                 ON bd.id = ra.bed_id
 
             WHERE b.status IN (
+                'Upcoming',
                 'Pending',
                 'Partial',
                 'Overdue'
@@ -380,7 +381,8 @@ export const applyLatePaymentFee = async (
 
         if (
             billing.status === "Paid" ||
-            billing.status === "Cancelled"
+            billing.status === "Cancelled" ||
+            billing.status === "Upcoming"
         ) {
 
             await client.query("ROLLBACK");
@@ -506,7 +508,8 @@ export const applyDiscount = async (
 
         if (
             billing.status === "Paid" ||
-            billing.status === "Cancelled"
+            billing.status === "Cancelled" ||
+            billing.status === "Upcoming"
         ) {
 
             await client.query("ROLLBACK");

@@ -223,6 +223,8 @@ export const assignRoom = async (
 
     await client.query("COMMIT");
 
+
+
     const assignmentDetails = await client.query(
       `
         SELECT
@@ -258,7 +260,7 @@ export const assignRoom = async (
         WHERE ra.id = $1
         `,
       [assignment.id]
-);
+    );
 
     return res.status(201).json({
       message: "Room assigned successfully.",
