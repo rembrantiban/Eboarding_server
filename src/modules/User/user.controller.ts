@@ -795,38 +795,38 @@ export const getAllDeletedUserAccounts = async (
 
     const result = await pool.query(
       `
-      SELECT
-        u.id,
-        u.user_id_no,
-        u.first_name,
-        u.last_name,
-        u.email,
-        u.username,
-        u.contact_number,
-        u.address,
-        u.avatar_url,
-        u.gender,
-        u.age,
-        u.valid_id_image,
-        u.valid_id_status,
-        u.user_type,
-        u.status,
-        u.account_status,
-        u.deleted_at,
+          SELECT
+          u.id,
+          u.user_id_no,
+          u.first_name,
+          u.last_name,
+          u.email,
+          u.username,
+          u.contact_number,
+          u.address,
+          u.avatar_url,
+          u.gender,
+          u.age,
+          u.valid_id_image,
+          u.valid_id_status,
+          u.user_type,
+          u.status,
+          u.account_status,
+          u.deleted_at,
 
-        admin.first_name || ' ' || admin.last_name AS deleted_by_name
-        admin.avatar_url AS deleted_by_avatar
+          admin.first_name || ' ' || admin.last_name AS deleted_by_name,
+          admin.avatar_url AS deleted_by_avatar
 
       FROM users u
 
       LEFT JOIN users admin
-        ON admin.id = u.deleted_by
+          ON admin.id = u.deleted_by
 
       WHERE
-        ${userFilter}
-        AND u.is_deleted = TRUE
+          ${userFilter}
+          AND u.is_deleted = TRUE
 
-      ORDER BY u.deleted_at DESC
+      ORDER BY u.deleted_at DESC;
       `
     );
 
