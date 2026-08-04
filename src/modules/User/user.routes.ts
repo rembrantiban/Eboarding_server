@@ -33,7 +33,7 @@ router.post("/login", login);
 router.post("/admin/users",upload.fields([{ name: "avatar", maxCount: 1 },{ name: "valid_id_image", maxCount: 1 }, ]), verifyAdmin, createUserByAdmin);
 router.post("/staff/users",upload.fields([{ name: "avatar", maxCount: 1 },{ name: "valid_id_image", maxCount: 1 }, ]), checkAuth, createUserByStaff);
 router.get("/users", checkAuth, getAllUsers);
-router.delete("/deleteUser/:id", deleteUserAccount);
+router.delete("/deleteUser/:id", checkAuth, deleteUserAccount);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
 router.put("/updateUser/:id",checkAuth,updateUser);
