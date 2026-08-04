@@ -1,16 +1,32 @@
 import cron from "node-cron";
-import { sendPaymentReminders } from "../modules/payments/payments.controller";
+import { pool } from "../config/db";
 
-cron.schedule("0 8 * * *", async () => {
-  console.log("⏰ Running payment reminders...");
+export const startBillingCron = () => {
+  cron.schedule("0 0 * * *", async () => {
+    console.log("Running overdue billing checker...");
 
-  try {
-    await sendPaymentReminders();
-    console.log("Reminders completed");
-  } catch (error) {
-    console.error("Cron job failed:", error);
-  }
+    try {
+      const result = await pool.query(
+        `
+        UPDATE billings
+        SET
+          status = 'Overdue',
+          updated_at = NOW()
+        WHERE
+          status IN ('Pending', 'Partial')
+          AND due_date < CURRENT_DATE
+        RETURNING billing_no;
+        `
+      );
 
-}, {
-  timezone: "Asia/Manila"
-});
+      console.log(
+        `${result.rowCount} billing(s) marked as Overdue.`
+      );
+
+    } catch (error) {
+      console.error("Billing cron error:", error);
+    }
+  });
+
+  console.log("Billing cron initialized.");
+};
