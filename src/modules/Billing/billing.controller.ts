@@ -992,17 +992,36 @@ export const getMyPaymentHistory = async (
           bed.id AS bed_id,
           bed.bed_number,
 
-          receiver.id AS received_by_id,
-          receiver.user_id_no,
-          receiver.first_name,
-          receiver.last_name,
-          receiver.email,
-          receiver.avatar_url
+          --------------------------------------------------
+          -- Boarder
+          --------------------------------------------------
+
+          boarder.id AS boarder_id,
+          boarder.user_id_no AS boarder_user_id_no,
+          boarder.first_name AS boarder_first_name,
+          boarder.last_name AS boarder_last_name,
+          boarder.email AS boarder_email,
+          boarder.contact_number AS boarder_contact_number,
+          boarder.avatar_url AS boarder_avatar_url,
+
+          --------------------------------------------------
+          -- Receiver / Cashier
+          --------------------------------------------------
+
+          receiver.id AS receiver_id,
+          receiver.user_id_no AS receiver_user_id_no,
+          receiver.first_name AS receiver_first_name,
+          receiver.last_name AS receiver_last_name,
+          receiver.email AS receiver_email,
+          receiver.avatar_url AS receiver_avatar_url
 
       FROM billing_payments bp
 
       INNER JOIN billings b
           ON b.id = bp.billing_id
+
+      INNER JOIN users boarder
+          ON boarder.id = b.user_id
 
       LEFT JOIN room_assignments ra
           ON ra.id = b.assignment_id
