@@ -829,3 +829,86 @@ export const getActivePenalties = async (
 
     }
 };
+
+
+export const getMyPendingBilling = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        message: "Unauthorized.",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+          b.id,
+          b.billing_no,
+
+          b.room_number,
+          b.bed_number,
+
+          b.billing_type,
+          b.billing_month,
+          b.due_date,
+
+          b.room_fee,
+          b.utilities_fee,
+          b.other_charges,
+
+          b.discount,
+          b.late_fee,
+
+          b.total_amount,
+          b.paid_amount,
+          b.balance,
+
+          b.status,
+
+          b.created_at,
+          b.updated_at
+
+      FROM billings b
+
+      WHERE
+          b.user_id = $1
+      AND
+          b.status IN
+          (
+              'Pending',
+              'Partial',
+              'Overdue'
+          )
+
+      ORDER BY
+          b.due_date ASC
+
+      LIMIT 1
+      `,
+      [userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(200).json({
+        billing: null,
+        message: "No pending billing found.",
+      });
+    }
+
+    return res.status(200).json({
+      billing: result.rows[0],
+    });
+
+  } catch (error) {
+    console.error("Get My Pending Billing:", error);
+
+    return res.status(500).json({
+      message: "Server error.",
+    });
+  }
+};
