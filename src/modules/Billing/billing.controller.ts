@@ -901,7 +901,7 @@ export const getMyPendingBilling = async (
     }
 
     return res.status(200).json({
-      billing: result.rows[0],
+      billing: result.rows,
     });
 
   } catch (error) {
