@@ -1092,3 +1092,91 @@ export const getPaymentsOverview = async (
 
   }
 };
+
+
+export const getCalendarEvents = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+          b.id,
+          b.due_date,
+          b.total_amount,
+          b.balance,
+          b.status,
+
+          CONCAT(
+            u.first_name,
+            ' ',
+            u.last_name
+          ) AS boarder,
+
+          r.room_number,
+          bed.bed_number
+
+      FROM billings b
+
+      JOIN users u
+        ON u.id = b.user_id
+
+      LEFT JOIN room_assignments ra
+        ON ra.id = b.assignment_id
+
+      LEFT JOIN rooms r
+        ON r.id = ra.room_id
+
+      LEFT JOIN beds bed
+        ON bed.id = ra.bed_id
+
+      WHERE b.status IN
+      (
+        'Upcoming',
+        'Pending',
+        'Overdue',
+        'Paid'
+      )
+
+      ORDER BY b.due_date;
+    `);
+
+    const events = result.rows.map((row) => ({
+      id: row.id,
+
+      date: row.due_date,
+
+      label: "Rent Payment",
+
+      type: "payment",
+
+      amount: Number(row.total_amount),
+
+      boarder: row.boarder,
+
+      room: `${row.room_number} - ${row.bed_number}`,
+
+      status: row.status,
+
+      color:
+        row.status === "Paid"
+          ? "#10b981"
+          : row.status === "Pending"
+          ? "#a855f7"
+          : row.status === "Upcoming"
+          ? "#6366f1"
+          : "#ef4444",
+    }));
+
+    res.json(events);
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      message: "Server error",
+    });
+
+  }
+};
