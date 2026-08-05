@@ -960,7 +960,6 @@ export const getOccupancyTrend = async (
   }
 }
 
-
 export const getMyDashboard = async (
   req: AuthRequest,
   res: Response
@@ -1049,4 +1048,59 @@ export const getMyDashboard = async (
   }
 };
 
+export const getRoomAvailabilityChart = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        r.id,
+        r.room_number AS room,
 
+        COUNT(b.id) AS total,
+
+        COUNT(ra.id)
+          FILTER (
+            WHERE ra.status = 'Active'
+          ) AS occupied,
+
+        COUNT(b.id) -
+        COUNT(ra.id)
+          FILTER (
+            WHERE ra.status = 'Active'
+          ) AS available
+
+      FROM rooms r
+
+      LEFT JOIN beds b
+        ON b.room_id = r.id
+
+      LEFT JOIN room_assignments ra
+        ON ra.bed_id = b.id
+       AND ra.status = 'Active'
+
+      GROUP BY
+        r.id,
+        r.room_number
+
+      ORDER BY
+        r.room_number;
+    `);
+
+    return res.json(
+      result.rows.map((room) => ({
+        room: room.room,
+        total: Number(room.total),
+        available: Number(room.available),
+        occupied: Number(room.occupied),
+      }))
+    );
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};

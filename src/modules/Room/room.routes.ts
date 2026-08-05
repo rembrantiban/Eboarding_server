@@ -10,7 +10,8 @@ import {
   getOccupancyTrend,
   getMyDashboard,
   getAvailableRooms,
-  updateRoomStatus
+  updateRoomStatus,
+  getRoomAvailabilityChart,
 } from "./room.controller";
 import { upload } from "../../lib/upload";
 import { checkAuth } from "../../middleware/checkAuth";
@@ -27,5 +28,6 @@ router.get("/occupancy-trend", getOccupancyTrend);
 router.get("/my-stats-dashboard", checkAuth, getMyDashboard);
 router.get("/available-rooms", checkAuth, getAvailableRooms);
 router.put( "/status/:id", checkAuth, updateRoomStatus);
+router.get("/availability-chart", checkAuth, getRoomAvailabilityChart);
 
 export default router;
