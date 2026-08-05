@@ -895,7 +895,7 @@ export const getMyPendingBilling = async (
 
     if (result.rowCount === 0) {
       return res.status(200).json({
-        billing: [],
+        billing:  [],
         message: "No pending billing found.",
       });
     }
