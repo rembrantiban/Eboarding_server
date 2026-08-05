@@ -846,49 +846,74 @@ export const getMyPendingBilling = async (
 
     const result = await pool.query(
       `
-      SELECT
-          b.id,
-          b.billing_no,
+            SELECT
+            b.id,
+            b.billing_no,
 
-          b.room_number,
-          b.bed_number,
+            b.billing_type,
+            b.billing_month,
+            b.due_date,
 
-          b.billing_type,
-          b.billing_month,
-          b.due_date,
+            b.room_fee,
+            b.utilities_fee,
+            b.other_charges,
 
-          b.room_fee,
-          b.utilities_fee,
-          b.other_charges,
+            b.discount,
+            b.late_fee,
 
-          b.discount,
-          b.late_fee,
+            b.total_amount,
+            b.paid_amount,
+            b.balance,
 
-          b.total_amount,
-          b.paid_amount,
-          b.balance,
+            b.status,
 
-          b.status,
+            b.created_at,
+            b.updated_at,
 
-          b.created_at,
-          b.updated_at
+            u.id AS user_id,
+            u.user_id_no,
+            u.first_name,
+            u.last_name,
+            u.email,
+            u.contact_number,
+            u.avatar_url,
 
-      FROM billings b
+            ra.id AS assignment_id,
+            ra.assigned_date,
+            ra.expected_checkout,
 
-      WHERE
-          b.user_id = $1
-      AND
-          b.status IN
-          (
-              'Pending',
-              'Partial',
-              'Overdue'
-          )
+            r.id AS room_id,
+            r.room_number,
 
-      ORDER BY
-          b.due_date ASC
+            bd.id AS bed_id,
+            bd.bed_number
 
-      LIMIT 1
+        FROM billings b
+
+        INNER JOIN users u
+            ON u.id = b.user_id
+
+        LEFT JOIN room_assignments ra
+            ON ra.id = b.assignment_id
+
+        LEFT JOIN rooms r
+            ON r.id = ra.room_id
+
+        LEFT JOIN beds bd
+            ON bd.id = ra.bed_id
+
+        WHERE
+            b.user_id = $1
+        AND
+            b.status IN
+            (
+                'Pending',
+                'Partial',
+                'Overdue',
+                'Upcoming'
+            )
+
+        ORDER BY b.due_date ASC;
       `,
       [userId]
     );
