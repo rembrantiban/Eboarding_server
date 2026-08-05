@@ -1104,3 +1104,45 @@ export const getRoomAvailabilityChart = async (
     });
   }
 };
+
+export const getBedOccupancyChart = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (
+          WHERE status = 'Occupied'
+        ) AS occupied,
+
+        COUNT(*) FILTER (
+          WHERE status = 'Available'
+        ) AS available
+
+      FROM beds;
+    `);
+
+    const row = result.rows[0];
+
+    return res.json([
+      {
+        name: "Occupied",
+        value: Number(row.occupied),
+        color: "#475569",
+      },
+      {
+        name: "Available",
+        value: Number(row.available),
+        color: "#cbd5e1",
+      },
+    ]);
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
