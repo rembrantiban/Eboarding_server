@@ -937,3 +937,112 @@ export const getMyPendingBilling = async (
     });
   }
 };
+
+
+export const getMyPaymentHistory = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        message: "Unauthorized.",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+
+          bp.id,
+
+          CONCAT(
+              'RCP-',
+              TO_CHAR(bp.received_at, 'YYYY'),
+              '-',
+              LPAD(bp.id::TEXT, 6, '0')
+          ) AS receipt_no,
+
+          bp.billing_id,
+          bp.status,
+          bp.amount,
+          bp.received_at,
+
+          b.billing_no,
+          b.billing_type,
+          b.billing_month,
+          b.due_date,
+          b.updated_at,
+
+          b.room_fee,
+          b.utilities_fee,
+          b.other_charges,
+          b.discount,
+          b.late_fee,
+
+          b.total_amount,
+          b.paid_amount,
+          b.balance,
+
+          r.id AS room_id,
+          r.room_number,
+
+          bed.id AS bed_id,
+          bed.bed_number,
+
+          receiver.id AS received_by_id,
+          receiver.user_id_no,
+          receiver.first_name,
+          receiver.last_name,
+          receiver.email,
+          receiver.avatar_url
+
+      FROM billing_payments bp
+
+      INNER JOIN billings b
+          ON b.id = bp.billing_id
+
+      LEFT JOIN room_assignments ra
+          ON ra.id = b.assignment_id
+
+      LEFT JOIN rooms r
+          ON r.id = ra.room_id
+
+      LEFT JOIN beds bed
+          ON bed.id = ra.bed_id
+
+      INNER JOIN users receiver
+          ON receiver.id = bp.received_by
+
+      WHERE
+          b.user_id = $1
+      AND
+          bp.status IN (
+              'Partial',
+              'Paid'
+          )
+
+      ORDER BY
+          bp.received_at DESC,
+          bp.id DESC
+      `,
+      [userId]
+    );
+
+    return res.status(200).json({
+      payments: result.rows,
+      total: result.rowCount,
+    });
+
+  } catch (error) {
+
+    console.error("Get My Payment History Error:", error);
+
+    return res.status(500).json({
+      message: "Server error.",
+    });
+
+  }
+};
