@@ -1053,3 +1053,42 @@ export const getMyPaymentHistory = async (
 
   }
 };
+
+
+export const getPaymentsOverview = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+          DATE(bp.received_at) AS payment_date,
+          TO_CHAR(bp.received_at, 'Mon DD') AS date,
+          SUM(bp.amount) AS value
+
+      FROM billing_payments bp
+
+      WHERE
+          DATE_TRUNC('month', bp.received_at) =
+          DATE_TRUNC('month', CURRENT_DATE)
+
+      GROUP BY
+          DATE(bp.received_at),
+          TO_CHAR(bp.received_at, 'Mon DD')
+
+      ORDER BY
+          DATE(bp.received_at)
+    `);
+
+    return res.status(200).json(result.rows);
+
+  } catch (error) {
+
+    console.error("Payments Overview:", error);
+
+    return res.status(500).json({
+      message: "Server error.",
+    });
+
+  }
+};

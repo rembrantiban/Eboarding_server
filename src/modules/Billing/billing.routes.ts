@@ -8,6 +8,7 @@ import {
     getActivePenalties,
     getMyPendingBilling,
     getMyPaymentHistory,
+    getPaymentsOverview,
 } from "./billing.controller"
 import express from "express"
 import { checkAuth } from "../../middleware/checkAuth"
@@ -23,5 +24,6 @@ router.get("/outstanding-balance", checkAuth, getOutstandingBalance);
 router.get("/active-penalties", checkAuth, getActivePenalties);
 router.get("/my-billing",checkAuth,getMyPendingBilling);
 router.get("/my-payment-history",checkAuth,getMyPaymentHistory);
+router.get("/payments-overview", checkAuth, getPaymentsOverview);
 
 export default router
