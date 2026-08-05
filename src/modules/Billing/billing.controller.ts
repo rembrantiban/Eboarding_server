@@ -1180,3 +1180,65 @@ export const getCalendarEvents = async (
 
   }
 };
+
+
+export const getAllActivePenalties = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        b.id,
+        CONCAT(u.first_name, ' ', u.last_name) AS boarder,
+        CONCAT(
+          LEFT(u.first_name,1),
+          LEFT(u.last_name,1)
+        ) AS initials,
+
+        'Late Payment' AS reason,
+
+        b.late_fee AS amount,
+
+        b.updated_at AS date,
+
+        r.room_number,
+        bed.bed_number
+
+      FROM billings b
+
+      INNER JOIN users u
+        ON u.id = b.user_id
+
+      LEFT JOIN room_assignments ra
+        ON ra.id = b.assignment_id
+
+      LEFT JOIN rooms r
+        ON r.id = ra.room_id
+
+      LEFT JOIN beds bed
+        ON bed.id = ra.bed_id
+
+      WHERE
+        b.late_fee > 0
+      AND
+        b.status IN
+        (
+          'Pending',
+          'Partial',
+          'Overdue'
+        )
+
+      ORDER BY b.updated_at DESC;
+    `);
+
+    return res.status(200).json(result.rows);
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Server error.",
+    });
+  }
+};
