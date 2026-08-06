@@ -19,6 +19,7 @@ import {
         getAvailableBoarders,
         recoverDeletedUserAccount,
         getAllDeletedUserAccounts,
+        getAvailableStaff,
        } from './user.controller'
 import { verifyAdmin } from "../../middleware/authMiddleware"
 import { checkAuth } from "../../middleware/checkAuth"
@@ -47,5 +48,6 @@ router.put("/update-user-status/:id", checkAuth, verifyAdmin, updateUserStatus);
 router.get("/available-boarders", checkAuth, getAvailableBoarders);
 router.get("/deleted-users", checkAuth, getAllDeletedUserAccounts);
 router.put("/recover-deleted-user/:id", checkAuth, verifyAdmin, recoverDeletedUserAccount);
+router.get("/available-staff", checkAuth, getAvailableStaff);
 
 export default router   

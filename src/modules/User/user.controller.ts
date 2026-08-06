@@ -7,8 +7,6 @@ import cloudinary from "../../config/cloudinary";
 import { UploadApiResponse } from "cloudinary";
 import { AuthRequest } from "../../types/auth";
 
-
-
 export const register = async (req: Request, res: Response) => {
   try {
     const {
@@ -1541,5 +1539,66 @@ export const updateUserStatus = async (
     return res.status(500).json({
       message: "Server error.",
     });
+  }
+};
+
+
+export const getAvailableStaff = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        u.id,
+        u.user_id_no,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.contact_number,
+        u.avatar_url,
+
+        COUNT(mr.id) FILTER (
+          WHERE mr.status IN ('Assigned','In Progress')
+        ) AS active_requests,
+
+        COUNT(mr.id) FILTER (
+          WHERE mr.status = 'Completed'
+        ) AS completed_requests,
+
+        COUNT(mr.id) FILTER (
+          WHERE mr.status = 'Closed'
+        ) AS closed_requests
+
+      FROM users u
+
+      LEFT JOIN maintenance_requests mr
+        ON mr.assigned_staff_id = u.id
+
+      WHERE
+        u.user_type = 'Staff'
+        AND u.status = 'Approved'
+        AND u.account_status = 'Active'
+        AND u.is_deleted = FALSE
+
+      GROUP BY
+        u.id
+
+      ORDER BY
+        active_requests ASC,
+        u.first_name ASC,
+        u.last_name ASC
+    `);
+
+    return res.status(200).json(result.rows);
+
+  } catch (error) {
+
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+
   }
 };
