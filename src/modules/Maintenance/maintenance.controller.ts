@@ -59,28 +59,25 @@ export const createMaintenanceRequest = async (
      * Upload image (optional)
      */
 
-    let imageUrl: string | null = null;
+  let imageUrl: string | null = null;
 
-    if (Array.isArray(req.files) && req.files.length > 0) {
-      const file = req.files[0];
-
-      const uploadResult: any = await new Promise((resolve, reject) => {
+if (req.file) {
+    const uploadResult: any = await new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
-          {
-            folder: "maintenance",
-          },
-          (error, result) => {
-            if (error) return reject(error);
-
-            resolve(result);
-          }
+            {
+                folder: "maintenance",
+            },
+            (error, result) => {
+                if (error) return reject(error);
+                resolve(result);
+            }
         );
 
-        stream.end(file.buffer);
-      });
+        stream.end(req.file?.buffer);
+    });
 
-      imageUrl = uploadResult.secure_url;
-    }
+    imageUrl = uploadResult.secure_url;
+}
 
     /**
      * Create Maintenance Request
