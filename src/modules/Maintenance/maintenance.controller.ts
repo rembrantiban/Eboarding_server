@@ -249,10 +249,7 @@ export const assignMaintenanceRequest = async (
 ) => {
   try {
     const { id } = req.params;
-
-    const {
-      assigned_staff_id,
-    } = req.body;
+    const { assigned_staff_id } = req.body;
 
     if (!assigned_staff_id) {
       return res.status(400).json({
@@ -260,6 +257,7 @@ export const assignMaintenanceRequest = async (
       });
     }
 
+    // Check if maintenance request exists
     const maintenance = await pool.query(
       `
       SELECT *
@@ -275,14 +273,20 @@ export const assignMaintenanceRequest = async (
       });
     }
 
+    // Prevent assigning an already assigned request
+    if (maintenance.rows[0].assigned_staff_id) {
+      return res.status(400).json({
+        message: "This maintenance request has already been assigned.",
+      });
+    }
+
+    // Check if staff exists
     const staff = await pool.query(
       `
       SELECT id
       FROM users
-      WHERE
-        id = $1
-      AND
-        user_type='Staff'
+      WHERE id = $1
+        AND user_type = 'Staff'
       `,
       [assigned_staff_id]
     );
@@ -293,18 +297,36 @@ export const assignMaintenanceRequest = async (
       });
     }
 
+    // Check if the selected staff already has an active assignment
+    const existingAssignment = await pool.query(
+      `
+      SELECT
+        id,
+        request_number
+      FROM maintenance_requests
+      WHERE assigned_staff_id = $1
+        AND status IN ('Assigned', 'In Progress')
+      LIMIT 1
+      `,
+      [assigned_staff_id]
+    );
+
+    if (existingAssignment.rows.length > 0) {
+      return res.status(400).json({
+        message:
+          "This staff member already has an active maintenance request assigned.",
+      });
+    }
+
+    // Assign maintenance request
     const result = await pool.query(
       `
       UPDATE maintenance_requests
-
       SET
-
         assigned_staff_id = $1,
         status = 'Assigned',
         updated_at = CURRENT_TIMESTAMP
-
       WHERE id = $2
-
       RETURNING *
       `,
       [
@@ -313,6 +335,7 @@ export const assignMaintenanceRequest = async (
       ]
     );
 
+    // Save history
     await pool.query(
       `
       INSERT INTO maintenance_history
@@ -322,7 +345,6 @@ export const assignMaintenanceRequest = async (
         remarks,
         updated_by
       )
-
       VALUES
       (
         $1,
@@ -338,19 +360,16 @@ export const assignMaintenanceRequest = async (
     );
 
     return res.json({
-      message:
-        "Maintenance request assigned successfully.",
+      message: "Maintenance request assigned successfully.",
       maintenance: result.rows[0],
     });
 
   } catch (error) {
-
     console.error(error);
 
     return res.status(500).json({
       message: "Server error",
     });
-
   }
 };
 
