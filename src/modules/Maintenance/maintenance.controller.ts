@@ -185,14 +185,25 @@ export const getSubmittedMaintenance = async (
     const result = await pool.query(
       `
       SELECT
-
         mr.id,
         mr.request_number,
+        mr.user_id,
+        mr.room_id,
         mr.category,
         mr.description,
         mr.image_url,
         mr.status,
         mr.created_at,
+        mr.updated_at,
+
+        CONCAT(
+          u.first_name,
+          ' ',
+          u.last_name
+        ) AS requested_by,
+
+        u.email,
+        u.contact_number,
 
         r.room_number,
 
@@ -204,6 +215,9 @@ export const getSubmittedMaintenance = async (
 
       FROM maintenance_requests mr
 
+      JOIN users u
+        ON u.id = mr.user_id
+
       JOIN rooms r
         ON r.id = mr.room_id
 
@@ -211,33 +225,21 @@ export const getSubmittedMaintenance = async (
         ON staff.id = mr.assigned_staff_id
 
       WHERE
-
-        mr.user_id = $1
-
-      AND
-
-        mr.status NOT IN
-        (
-          'Completed',
-          'Closed'
-        )
+        mr.status NOT IN ('Completed', 'Closed')
 
       ORDER BY
         mr.created_at DESC
-      `,
-      [req.user.id]
+      `
     );
 
     return res.json(result.rows);
 
   } catch (error) {
-
     console.error(error);
 
     return res.status(500).json({
       message: "Server error",
     });
-
   }
 };
 
