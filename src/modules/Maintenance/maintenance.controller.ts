@@ -19,49 +19,19 @@ export const createMaintenanceRequest = async (
     const {
       category,
       description,
+      room_id,
     } = req.body;
 
-    if (!category || !description) {
+    if (!category || !description || !room_id) {
       return res.status(400).json({
-        message: "Category and description are required.",
+        message: "Category, room and description are required.",
       });
     }
 
     await client.query("BEGIN");
 
     /**
-     * Find boarder information
-     */
-    const boarderResult = await client.query(
-      `
-      SELECT
-        b.id,
-        b.room_id,
-        b.bed_id
-      FROM boarders b
-
-      JOIN users u
-        ON u.id = b.user_id
-
-      WHERE u.id = $1
-
-      LIMIT 1
-      `,
-      [req.user.id]
-    );
-
-    if (boarderResult.rows.length === 0) {
-      await client.query("ROLLBACK");
-
-      return res.status(404).json({
-        message: "Boarder record not found.",
-      });
-    }
-
-    const boarder = boarderResult.rows[0];
-
-    /**
-     * Generate request number
+     * Generate Request Number
      * Example:
      * MR-20260805-0001
      */
@@ -77,54 +47,43 @@ export const createMaintenanceRequest = async (
       `
       SELECT COUNT(*) AS total
       FROM maintenance_requests
-      WHERE DATE(created_at)=CURRENT_DATE
+      WHERE DATE(created_at) = CURRENT_DATE
       `
     );
 
-    const sequence =
-      Number(countResult.rows[0].total) + 1;
+    const sequence = Number(countResult.rows[0].total) + 1;
 
-    const requestNumber =
-      `MR-${date}-${String(sequence).padStart(4, "0")}`;
+    const requestNumber = `MR-${date}-${String(sequence).padStart(4, "0")}`;
 
     /**
-     * Upload image if provided
+     * Upload image (optional)
      */
 
     let imageUrl: string | null = null;
 
-    if (
-      Array.isArray(req.files) &&
-      req.files.length > 0
-    ) {
+    if (Array.isArray(req.files) && req.files.length > 0) {
       const file = req.files[0];
 
-      const uploadResult: any =
-        await new Promise((resolve, reject) => {
+      const uploadResult: any = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            folder: "maintenance",
+          },
+          (error, result) => {
+            if (error) return reject(error);
 
-          const stream =
-            cloudinary.uploader.upload_stream(
-              {
-                folder: "maintenance",
-              },
-              (error, result) => {
+            resolve(result);
+          }
+        );
 
-                if (error) return reject(error);
-
-                resolve(result);
-
-              }
-            );
-
-          stream.end(file.buffer);
-
-        });
+        stream.end(file.buffer);
+      });
 
       imageUrl = uploadResult.secure_url;
     }
 
     /**
-     * Create request
+     * Create Maintenance Request
      */
 
     const result = await client.query(
@@ -132,9 +91,8 @@ export const createMaintenanceRequest = async (
       INSERT INTO maintenance_requests
       (
         request_number,
-        boarder_id,
+        user_id,
         room_id,
-        bed_id,
         category,
         description,
         image_url,
@@ -143,16 +101,21 @@ export const createMaintenanceRequest = async (
 
       VALUES
       (
-        $1,$2,$3,$4,$5,$6,$7,'Pending'
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        'Pending'
       )
 
       RETURNING *
       `,
       [
         requestNumber,
-        boarder.id,
-        boarder.room_id,
-        boarder.bed_id,
+        req.user.id,
+        room_id,
         category,
         description,
         imageUrl,
@@ -160,7 +123,7 @@ export const createMaintenanceRequest = async (
     );
 
     /**
-     * Create history
+     * Save History
      */
 
     await client.query(
@@ -190,8 +153,7 @@ export const createMaintenanceRequest = async (
     await client.query("COMMIT");
 
     return res.status(201).json({
-      message:
-        "Maintenance request submitted successfully.",
+      message: "Maintenance request submitted successfully.",
       maintenance: result.rows[0],
     });
 
@@ -202,8 +164,7 @@ export const createMaintenanceRequest = async (
     console.error(error);
 
     return res.status(500).json({
-      message:
-        error?.message || "Server error",
+      message: error?.message || "Server error",
     });
 
   } finally {
@@ -218,33 +179,11 @@ export const getSubmittedMaintenance = async (
   res: Response
 ) => {
   try {
-
     if (!req.user) {
       return res.status(401).json({
         message: "Unauthorized",
       });
     }
-
-    const boarderResult = await pool.query(
-      `
-      SELECT id
-
-      FROM boarders
-
-      WHERE user_id = $1
-
-      LIMIT 1
-      `,
-      [req.user.id]
-    );
-
-    if (boarderResult.rows.length === 0) {
-      return res.status(404).json({
-        message: "Boarder not found.",
-      });
-    }
-
-    const boarderId = boarderResult.rows[0].id;
 
     const result = await pool.query(
       `
@@ -258,29 +197,25 @@ export const getSubmittedMaintenance = async (
         mr.status,
         mr.created_at,
 
-        CONCAT(
-          s.first_name,
-          ' ',
-          s.last_name
-        ) AS assigned_staff,
-
         r.room_number,
-        b.bed_number
+
+        CONCAT(
+          staff.first_name,
+          ' ',
+          staff.last_name
+        ) AS assigned_staff
 
       FROM maintenance_requests mr
 
       JOIN rooms r
         ON r.id = mr.room_id
 
-      LEFT JOIN beds b
-        ON b.id = mr.bed_id
-
-      LEFT JOIN users s
-        ON s.id = mr.assigned_staff_id
+      LEFT JOIN users staff
+        ON staff.id = mr.assigned_staff_id
 
       WHERE
 
-        mr.boarder_id = $1
+        mr.user_id = $1
 
       AND
 
@@ -293,7 +228,7 @@ export const getSubmittedMaintenance = async (
       ORDER BY
         mr.created_at DESC
       `,
-      [boarderId]
+      [req.user.id]
     );
 
     return res.json(result.rows);
@@ -454,7 +389,7 @@ export const updateMaintenanceStatus = async (
       `
       SELECT *
       FROM maintenance_requests
-      WHERE id=$1
+      WHERE id = $1
       `,
       [id]
     );
@@ -481,8 +416,7 @@ export const updateMaintenanceStatus = async (
       await client.query("ROLLBACK");
 
       return res.status(400).json({
-        message:
-          "Only completed requests can be closed.",
+        message: "Only completed requests can be closed.",
       });
 
     }
@@ -492,11 +426,10 @@ export const updateMaintenanceStatus = async (
       UPDATE maintenance_requests
 
       SET
+        status = $1,
+        updated_at = CURRENT_TIMESTAMP
 
-        status=$1,
-        updated_at=CURRENT_TIMESTAMP
-
-      WHERE id=$2
+      WHERE id = $2
 
       RETURNING *
       `,
@@ -563,6 +496,12 @@ export const updateMaintenanceRequest = async (
   const client = await pool.connect();
 
   try {
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
     const { id } = req.params;
 
     const {
@@ -592,19 +531,30 @@ export const updateMaintenanceRequest = async (
 
     const maintenance = maintenanceResult.rows[0];
 
+    /**
+     * Prevent users from editing other users' requests.
+     * Administrators can still edit any request.
+     */
+    if (
+      maintenance.user_id !== req.user.id &&
+      req.user.user_type !== "Administrator"
+    ) {
+      await client.query("ROLLBACK");
+
+      return res.status(403).json({
+        message: "You are not allowed to update this request.",
+      });
+    }
+
     let imageUrl = maintenance.image_url;
 
     /**
-     * Remove old image if user deleted it
+     * Remove existing image
      */
-
     if (!existingImage && maintenance.image_url) {
       try {
-        const fileName =
-          maintenance.image_url.split("/").pop()!;
-
-        const publicId =
-          `maintenance/${fileName.split(".")[0]}`;
+        const fileName = maintenance.image_url.split("/").pop()!;
+        const publicId = `maintenance/${fileName.split(".")[0]}`;
 
         await cloudinary.uploader.destroy(publicId);
       } catch (err) {
@@ -615,20 +565,16 @@ export const updateMaintenanceRequest = async (
     }
 
     /**
-     * Upload new image
+     * Upload replacement image
      */
-
     if (
       Array.isArray(req.files) &&
       req.files.length > 0
     ) {
       if (maintenance.image_url) {
         try {
-          const fileName =
-            maintenance.image_url.split("/").pop()!;
-
-          const publicId =
-            `maintenance/${fileName.split(".")[0]}`;
+          const fileName = maintenance.image_url.split("/").pop()!;
+          const publicId = `maintenance/${fileName.split(".")[0]}`;
 
           await cloudinary.uploader.destroy(publicId);
         } catch {}
@@ -636,26 +582,22 @@ export const updateMaintenanceRequest = async (
 
       const file = req.files[0];
 
-      const uploadResult: any =
-        await new Promise((resolve, reject) => {
+      const uploadResult: any = await new Promise(
+        (resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            {
+              folder: "maintenance",
+            },
+            (error, result) => {
+              if (error) return reject(error);
 
-          const stream =
-            cloudinary.uploader.upload_stream(
-              {
-                folder: "maintenance",
-              },
-              (error, result) => {
-
-                if (error) return reject(error);
-
-                resolve(result);
-
-              }
-            );
+              resolve(result);
+            }
+          );
 
           stream.end(file.buffer);
-
-        });
+        }
+      );
 
       imageUrl = uploadResult.secure_url;
     }
@@ -665,7 +607,6 @@ export const updateMaintenanceRequest = async (
       UPDATE maintenance_requests
 
       SET
-
         category = COALESCE($1, category),
         description = COALESCE($2, description),
         image_url = $3,
@@ -686,8 +627,7 @@ export const updateMaintenanceRequest = async (
     await client.query("COMMIT");
 
     return res.json({
-      message:
-        "Maintenance request updated successfully.",
+      message: "Maintenance request updated successfully.",
       maintenance: result.rows[0],
     });
 
@@ -698,8 +638,7 @@ export const updateMaintenanceRequest = async (
     console.error(error);
 
     return res.status(500).json({
-      message:
-        error?.message || "Server error",
+      message: error?.message || "Server error",
     });
 
   } finally {
@@ -714,7 +653,6 @@ export const getMyAssignedMaintenance = async (
   res: Response
 ) => {
   try {
-
     if (!req.user) {
       return res.status(401).json({
         message: "Unauthorized",
@@ -739,22 +677,15 @@ export const getMyAssignedMaintenance = async (
           u.last_name
         ) AS boarder,
 
-        r.room_number,
-        b.bed_number
+        r.room_number
 
       FROM maintenance_requests mr
 
-      JOIN boarders bd
-        ON bd.id = mr.boarder_id
-
       JOIN users u
-        ON u.id = bd.user_id
+        ON u.id = mr.user_id
 
       JOIN rooms r
         ON r.id = mr.room_id
-
-      LEFT JOIN beds b
-        ON b.id = mr.bed_id
 
       WHERE
 
@@ -787,3 +718,65 @@ export const getMyAssignedMaintenance = async (
   }
 };
 
+export const getMySubmittedRequest = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+
+        mr.id,
+        mr.request_number,
+        mr.category,
+        mr.description,
+        mr.image_url,
+        mr.status,
+        mr.created_at,
+        mr.updated_at,
+
+        r.room_number,
+
+        CONCAT(
+          staff.first_name,
+          ' ',
+          staff.last_name
+        ) AS assigned_staff
+
+      FROM maintenance_requests mr
+
+      JOIN rooms r
+        ON r.id = mr.room_id
+
+      LEFT JOIN users staff
+        ON staff.id = mr.assigned_staff_id
+
+      WHERE
+        mr.user_id = $1
+
+      ORDER BY
+        mr.created_at DESC
+      `,
+      [req.user.id]
+    );
+
+    return res.json(result.rows);
+
+  } catch (error) {
+
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+
+  }
+};

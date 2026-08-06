@@ -3,17 +3,13 @@ CREATE TABLE maintenance_requests (
 
     request_number VARCHAR(30) UNIQUE NOT NULL,
 
-    boarder_id INTEGER NOT NULL
-        REFERENCES boarders(id)
+    user_id INTEGER NOT NULL
+        REFERENCES users(id)
         ON DELETE CASCADE,
 
     room_id INTEGER NOT NULL
         REFERENCES rooms(id)
         ON DELETE CASCADE,
-
-    bed_id INTEGER
-        REFERENCES beds(id)
-        ON DELETE SET NULL,
 
     category VARCHAR(100) NOT NULL,
 
@@ -26,15 +22,15 @@ CREATE TABLE maintenance_requests (
         ON DELETE SET NULL,
 
     status VARCHAR(30) NOT NULL DEFAULT 'Pending'
-    CHECK (
-        status IN (
-            'Pending',
-            'Assigned',
-            'In Progress',
-            'Completed',
-            'Closed'
-        )
-    ),
+        CHECK (
+            status IN (
+                'Pending',
+                'Assigned',
+                'In Progress',
+                'Completed',
+                'Closed'
+            )
+        ),
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
