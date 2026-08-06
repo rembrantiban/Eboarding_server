@@ -273,7 +273,7 @@ export const assignMaintenanceRequest = async (
       });
     }
 
-    // Prevent assigning an already assigned request
+    // Prevent assigning a request that already has a staff
     if (maintenance.rows[0].assigned_staff_id) {
       return res.status(400).json({
         message: "This maintenance request has already been assigned.",
@@ -297,7 +297,7 @@ export const assignMaintenanceRequest = async (
       });
     }
 
-    // Check if the selected staff already has an active assignment
+    // Prevent assigning a staff who already has an active request
     const existingAssignment = await pool.query(
       `
       SELECT
@@ -305,7 +305,7 @@ export const assignMaintenanceRequest = async (
         request_number
       FROM maintenance_requests
       WHERE assigned_staff_id = $1
-        AND status IN ('Assigned', 'In Progress')
+        AND status = 'In Progress'
       LIMIT 1
       `,
       [assigned_staff_id]
@@ -314,17 +314,17 @@ export const assignMaintenanceRequest = async (
     if (existingAssignment.rows.length > 0) {
       return res.status(400).json({
         message:
-          "This staff member already has an active maintenance request assigned.",
+          "This staff member is already handling another maintenance request.",
       });
     }
 
-    // Assign maintenance request
+    // Assign the request
     const result = await pool.query(
       `
       UPDATE maintenance_requests
       SET
         assigned_staff_id = $1,
-        status = 'Assigned',
+        status = 'In Progress',
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $2
       RETURNING *
@@ -335,7 +335,7 @@ export const assignMaintenanceRequest = async (
       ]
     );
 
-    // Save history
+    // Save history (kept exactly as requested)
     await pool.query(
       `
       INSERT INTO maintenance_history
