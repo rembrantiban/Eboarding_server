@@ -803,7 +803,11 @@ export const getBoarderRequests = async (
   res: Response
 ) => {
   try {
-    const { boarderId } = req.params;
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
 
     const result = await pool.query(
       `
@@ -819,7 +823,7 @@ export const getBoarderRequests = async (
         mr.created_at,
         mr.updated_at,
 
-        r.room_number AS request_room_number,
+        r.room_number,
 
         CONCAT(
           u.first_name,
@@ -834,9 +838,7 @@ export const getBoarderRequests = async (
           staff.first_name,
           ' ',
           staff.last_name
-        ) AS assigned_staff,
-
-        current_room.room_number AS current_room_number
+        ) AS assigned_staff
 
       FROM maintenance_requests mr
 
@@ -849,18 +851,11 @@ export const getBoarderRequests = async (
       LEFT JOIN users staff
         ON staff.id = mr.assigned_staff_id
 
-      LEFT JOIN room_assignments ra
-        ON ra.boarder_id = u.id
-        AND ra.status = 'Active'
-
-      LEFT JOIN rooms current_room
-        ON current_room.id = ra.room_id
-
       WHERE mr.user_id = $1
 
       ORDER BY mr.created_at DESC
       `,
-      [boarderId]
+      [req.user.id]
     );
 
     return res.json(result.rows);
