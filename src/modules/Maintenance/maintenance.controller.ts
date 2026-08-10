@@ -797,3 +797,70 @@ export const getMySubmittedRequest = async (
 
   }
 };
+
+export const getBoarderRequests = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    const { boarderId } = req.params;
+
+    const result = await pool.query(
+      `
+      SELECT
+        mr.id,
+        mr.request_number,
+        mr.user_id,
+        mr.room_id,
+        mr.category,
+        mr.description,
+        mr.image_url,
+        mr.status,
+        mr.created_at,
+        mr.updated_at,
+
+        r.room_number,
+
+        CONCAT(
+          u.first_name,
+          ' ',
+          u.last_name
+        ) AS boarder_name,
+
+        u.email,
+        u.contact_number,
+
+        CONCAT(
+          staff.first_name,
+          ' ',
+          staff.last_name
+        ) AS assigned_staff
+
+      FROM maintenance_requests mr
+
+      JOIN users u
+        ON u.id = mr.user_id
+
+      JOIN rooms r
+        ON r.id = mr.room_id
+
+      LEFT JOIN users staff
+        ON staff.id = mr.assigned_staff_id
+
+      WHERE mr.user_id = $1
+
+      ORDER BY mr.created_at DESC
+      `,
+      [boarderId]
+    );
+
+    return res.json(result.rows);
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};

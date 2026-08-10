@@ -6,6 +6,7 @@ import {
     updateMaintenanceRequest,
     getMyAssignedMaintenance,
     getMySubmittedRequest,
+    getBoarderRequests,
 } from "./maintenance.controller";
 import express from "express";
 import { upload } from "../../lib/upload";
@@ -22,6 +23,7 @@ router.put("/status/:id", checkAuth, upload.single("image"), updateMaintenanceSt
 router.put("/requests/:id", checkAuth, updateMaintenanceRequest)
 router.get("/my-assigned", checkAuth, getMyAssignedMaintenance)
 router.get("/my-submitted", checkAuth, getMySubmittedRequest)
+router.get("/boarder", checkAuth, getBoarderRequests)
 
 
 export default router
