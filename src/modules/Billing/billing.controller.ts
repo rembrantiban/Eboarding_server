@@ -910,7 +910,6 @@ export const getMyPendingBilling = async (
                 'Pending',
                 'Partial',
                 'Overdue',
-                'Upcoming'
             )
 
         ORDER BY b.due_date ASC;
