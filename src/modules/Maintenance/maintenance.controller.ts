@@ -819,7 +819,7 @@ export const getBoarderRequests = async (
         mr.created_at,
         mr.updated_at,
 
-        r.room_number,
+        r.room_number AS request_room_number,
 
         CONCAT(
           u.first_name,
@@ -834,7 +834,9 @@ export const getBoarderRequests = async (
           staff.first_name,
           ' ',
           staff.last_name
-        ) AS assigned_staff
+        ) AS assigned_staff,
+
+        current_room.room_number AS current_room_number
 
       FROM maintenance_requests mr
 
@@ -846,6 +848,13 @@ export const getBoarderRequests = async (
 
       LEFT JOIN users staff
         ON staff.id = mr.assigned_staff_id
+
+      LEFT JOIN room_assignments ra
+        ON ra.boarder_id = u.id
+        AND ra.status = 'Active'
+
+      LEFT JOIN rooms current_room
+        ON current_room.id = ra.room_id
 
       WHERE mr.user_id = $1
 
