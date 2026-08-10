@@ -273,7 +273,6 @@ export const assignMaintenanceRequest = async (
       });
     }
 
-    // Prevent assigning a request that already has a staff
     if (maintenance.rows[0].assigned_staff_id) {
       return res.status(400).json({
         message: "This maintenance request has already been assigned.",
@@ -314,7 +313,7 @@ export const assignMaintenanceRequest = async (
     if (existingAssignment.rows.length > 0) {
       return res.status(400).json({
         message:
-          "This staff member is already handling another maintenance request.",
+          "This staff member is already handling another maintenance request wait until it is completed.",
       });
     }
 
