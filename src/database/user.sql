@@ -10,7 +10,10 @@ CREATE TABLE users (
   email VARCHAR(150) UNIQUE NOT NULL,
   username VARCHAR(100) UNIQUE NOT NULL,
 
+  country_code VARCHAR(10),
   contact_number VARCHAR(20),
+  
+  nationality VARCHAR(100),
   address TEXT,
 
   password TEXT NOT NULL,
@@ -36,9 +39,10 @@ CREATE TABLE users (
   ),
 
 valid_id_rejection_reason TEXT,
-valid_id_verified_by INT, 
+valid_id_verified_by INT,
 
 -- Emergency Contact
+
 emergency_contact_name VARCHAR(100),
   emergency_contact_number VARCHAR(20),
   emergency_contact_relationship VARCHAR(50),

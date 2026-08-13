@@ -14,7 +14,9 @@ export const register = async (req: Request, res: Response) => {
       last_name,
       email,
       username,
+      country_code,
       contact_number,
+      nationality,
       address,
       password,
       user_type,
@@ -95,7 +97,9 @@ export const register = async (req: Request, res: Response) => {
         last_name,
         email,
         username,
+        country_code,
         contact_number,
+        nationality,
         address,
         password,
         avatar_url,
@@ -119,7 +123,9 @@ export const register = async (req: Request, res: Response) => {
         last_name,
         email,
         username,
+        country_code,
         contact_number,
+        nationality,
         address,
         avatar_url,
         gender,
@@ -138,7 +144,9 @@ export const register = async (req: Request, res: Response) => {
         last_name,
         email,
         username,
+        country_code,
         contact_number,
+        nationality,
         address,
         hashedPassword,
         avatarUrl,
@@ -235,6 +243,8 @@ export const login = async (req: Request, res: Response) => {
         username: user.username,
         user_type: user.user_type,
         address: user.address,
+        country_code: user.country_code,
+        nationality: user.nationality,
         contact_number: user.contact_number,
         avatar_url: user.avatar_url,
         valid_id_type: user.valid_id_type,
@@ -259,6 +269,8 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
       last_name,
       email,
       username,
+      country_code,
+      nationality,
       contact_number,
       address,
       password,
@@ -347,6 +359,8 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
         last_name,
         email,
         username,
+        country_code,
+        nationality,
         contact_number,
         address,
         password,
@@ -373,6 +387,7 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
         last_name,
         email,
         username,
+        country_code,
         contact_number,
         address,
         avatar_url,
@@ -391,6 +406,8 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
         last_name,
         email,
         username,
+        nationality,
+        country_code,
         contact_number,
         address,
         hashedPassword,
@@ -426,7 +443,9 @@ export const createUserByStaff = async (req: Request, res: Response) => {
       last_name,
       email,
       username,
+      country_code,
       contact_number,
+      nationality,
       address,
       password,
       user_type,
@@ -514,7 +533,9 @@ export const createUserByStaff = async (req: Request, res: Response) => {
         last_name,
         email,
         username,
+        country_code,
         contact_number,
+        nationality,
         address,
         password,
         avatar_url,
@@ -540,7 +561,9 @@ export const createUserByStaff = async (req: Request, res: Response) => {
         last_name,
         email,
         username,
+        country_code,
         contact_number,
+        nationality,
         address,
         avatar_url,
         gender,
@@ -558,7 +581,9 @@ export const createUserByStaff = async (req: Request, res: Response) => {
         last_name,
         email,
         username,
+        country_code,
         contact_number,
+        nationality,
         address,
         hashedPassword,
         avatarUrl,
@@ -613,9 +638,11 @@ export const getAllUsers = async (
           u.last_name,
           u.email,
           u.username,
+          u.country_code,
           u.contact_number,
           u.address,
           u.avatar_url,
+          u.nationality,
 
           u.gender,
           u.age,
@@ -684,10 +711,12 @@ export const getAvailableBoarders = async (
         u.first_name,
         u.last_name,
         u.email,
+        u.country_code,
         u.contact_number,
         u.avatar_url,
         u.gender,
-        u.age
+        u.age,
+        u.nationality
 
       FROM users u
 
@@ -805,6 +834,8 @@ export const getAllDeletedUserAccounts = async (
           u.avatar_url,
           u.gender,
           u.age,
+          u.nationality,
+          u.country_code,
           u.valid_id_image,
           u.valid_id_status,
           u.user_type,
@@ -855,7 +886,9 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
       password,
       user_type,
       contact_number,
-      is_assigned
+      is_assigned,
+      nationality,
+      country_code
     } = req.body;
 
     // 🔷 check if user exists
@@ -894,12 +927,14 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
         address = $5,
         password = $6,
         user_type = $7,
-        contact_number = $8,
+        country_code = $8,
+        contact_number = $9,
+        nationality = $10,
         updated_at = CURRENT_TIMESTAMP,
-        is_assigned = $9
+        is_assigned = $11
 
-      WHERE id = $10
-      RETURNING id, first_name, last_name, email, username, address, user_type, contact_number, is_assigned, created_at, updated_at
+      WHERE id = $12
+      RETURNING id, first_name, last_name, email, username, address, user_type, country_code, contact_number, nationality, is_assigned, created_at, updated_at
       `,
       [
         first_name ?? existingUser.first_name,
@@ -909,7 +944,9 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
         address ?? existingUser.address,
         hashedPassword,
         user_type ?? existingUser.user_type,
+        country_code ?? existingUser.country_code,
         contact_number ?? existingUser.contact_number,
+        nationality ?? existingUser.nationality,
         is_assigned ?? existingUser.is_assigned,
         id,
       ]
@@ -983,7 +1020,7 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
         avatar_url = COALESCE($8, avatar_url),
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $9
-      RETURNING id, first_name, last_name, username, user_type, contact_number, address , email, avatar_url`,
+      RETURNING id, first_name, last_name, username, user_type, contact_number, address , email, avatar_url, country_code, nationality`,
       [
         first_name,
         last_name,
@@ -1504,6 +1541,8 @@ export const updateUserStatus = async (
         last_name,
         email,
         username,
+        country_code,
+        nationality,
         contact_number,
         address,
         avatar_url,
