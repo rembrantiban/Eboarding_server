@@ -18,6 +18,8 @@ CREATE TABLE billing_payments (
         )
     ),
 
+    reason VARCHAR(255),
+    notes TEXT,
     received_by INT NOT NULL
         REFERENCES users(id),
 

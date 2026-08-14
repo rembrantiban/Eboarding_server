@@ -11,6 +11,7 @@ import {
     getPaymentsOverview,
     getCalendarEvents,
     getAllActivePenalties,
+    cancelBilling,
 } from "./billing.controller"
 import express from "express"
 import { checkAuth } from "../../middleware/checkAuth"
@@ -29,5 +30,6 @@ router.get("/my-payment-history",checkAuth,getMyPaymentHistory);
 router.get("/payments-overview", checkAuth, getPaymentsOverview);
 router.get("/calendar-events",checkAuth, getCalendarEvents);
 router.get("/all-active-penalties", checkAuth, getAllActivePenalties);
+router.put("/cancel-billing/:id", checkAuth, cancelBilling);
 
 export default router

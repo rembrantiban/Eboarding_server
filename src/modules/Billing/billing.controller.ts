@@ -9,7 +9,6 @@ export const recordPayment = async (
 ) => {
 
     const client = await pool.connect();
-
     try {
 
         const { id } = req.params;
@@ -138,9 +137,6 @@ export const recordPayment = async (
             ]
         );
 
-        //----------------------------------------------------
-        // Record Payment History
-        //----------------------------------------------------
 
         await client.query(
             `
@@ -1336,4 +1332,142 @@ export const getAllActivePenalties = async (
             message: "Server error.",
         });
     }
+};
+
+
+export const cancelBilling = async (
+    req: AuthRequest,
+    res: Response
+) => {
+
+    const client = await pool.connect();
+
+    try {
+
+        const { id } = req.params;
+
+        const {
+            reason,
+            notes,
+        } = req.body;
+
+        const cancelledBy = req.user?.id;
+
+        if (!cancelledBy) {
+            return res.status(401).json({
+                message: "Unauthorized.",
+            });
+        }
+
+        if (!reason) {
+            return res.status(400).json({
+                message: "Cancellation reason is required.",
+            });
+        }
+
+        await client.query("BEGIN");
+
+        const billingResult = await client.query(
+            `
+            SELECT *
+            FROM billings
+            WHERE id = $1
+            FOR UPDATE
+            `,
+            [id]
+        );
+
+        if (billingResult.rowCount === 0) {
+
+            await client.query("ROLLBACK");
+
+            return res.status(404).json({
+                message: "Billing not found.",
+            });
+
+        }
+
+        const billing = billingResult.rows[0];
+
+        if (
+            billing.status === "Paid" ||
+            billing.status === "Cancelled"
+        ) {
+
+            await client.query("ROLLBACK");
+
+            return res.status(400).json({
+                message:
+                    "This billing cannot be cancelled.",
+            });
+
+        }
+
+        const updatedBilling = await client.query(
+            `
+            UPDATE billings
+            SET
+                status = 'Cancelled',
+                updated_at = NOW()
+            WHERE id = $1
+            RETURNING *
+            `,
+            [id]
+        );
+
+        await client.query(
+            `
+            INSERT INTO billing_payments
+            (
+                billing_id,
+                amount,
+                status,
+                reason,
+                notes,
+                received_by,
+                received_at
+            )
+            VALUES
+            (
+                $1,
+                0,
+                'Cancelled',
+                $2,
+                $3,
+                $4,
+                NOW()
+            )
+            `,
+            [
+                id,
+                reason,
+                notes ?? null,
+                cancelledBy
+            ]
+        );
+
+        await client.query("COMMIT");
+
+        return res.status(200).json({
+            message:
+                "Billing cancelled successfully.",
+            billing: updatedBilling.rows[0],
+        });
+
+    } catch (error) {
+
+        await client.query("ROLLBACK");
+
+        console.error(error);
+
+        return res.status(500).json({
+            message: "Server error.",
+        });
+
+    } finally {
+
+        client.release();
+
+    }
+
 };
