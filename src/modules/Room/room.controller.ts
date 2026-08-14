@@ -1155,30 +1155,18 @@ export const getRoomOccupancyChart = async (
     const result = await pool.query(`
       SELECT
         COUNT(*) FILTER (
-          WHERE r.status = 'Available'
-          AND EXISTS (
-            SELECT 1
-            FROM beds b
-            WHERE b.room_id = r.id
-              AND b.status = 'Available'
-          )
+          WHERE status = 'Available'
         ) AS available,
 
         COUNT(*) FILTER (
-          WHERE r.status = 'Available'
-          AND NOT EXISTS (
-            SELECT 1
-            FROM beds b
-            WHERE b.room_id = r.id
-              AND b.status = 'Available'
-          )
+          WHERE status = 'Occupied'
         ) AS occupied,
 
         COUNT(*) FILTER (
-          WHERE r.status = 'Under Maintenance'
+          WHERE status = 'Under Maintenance'
         ) AS maintenance
 
-      FROM rooms r
+      FROM rooms
     `);
 
     const row = result.rows[0];
@@ -1195,7 +1183,7 @@ export const getRoomOccupancyChart = async (
         color: "#0f172a",
       },
       {
-        name: "Maintenance",
+        name: "Under Maintenance",
         value: Number(row.maintenance),
         color: "#f59e0b",
       },
@@ -1204,10 +1192,13 @@ export const getRoomOccupancyChart = async (
     return res.status(200).json(data);
 
   } catch (error) {
-    console.error("Room Occupancy:", error);
+    console.error(
+      "Room Occupancy Chart Error:",
+      error
+    );
 
     return res.status(500).json({
-      message: "Server error.",
+      message: "Failed to load room occupancy chart.",
     });
   }
 };
