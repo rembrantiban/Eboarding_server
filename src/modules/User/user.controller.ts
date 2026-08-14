@@ -180,7 +180,7 @@ export const login = async (req: Request, res: Response) => {
     const { identifier, password } = req.body;
 
     const result = await pool.query(
-        `
+      `
         SELECT *
         FROM users
         WHERE email = $1 OR username = $1
@@ -1639,5 +1639,127 @@ export const getAvailableStaff = async (
       message: "Server error",
     });
 
+  }
+};
+
+
+export const getStaffDashboardStats = async (req: AuthRequest, res: Response) => {
+  try {
+    // Current Boarders
+    const currentBoarders = await pool.query(`
+      SELECT COUNT(*)::int AS count
+      FROM users
+      WHERE user_type = 'Boarder'
+      AND account_status = 'Active'
+    `);
+
+    // Previous Month Boarders
+    const previousBoarders = await pool.query(`
+      SELECT COUNT(*)::int AS count
+      FROM users
+      WHERE user_type = 'Boarder'
+      AND account_status = 'Active'
+      AND created_at < DATE_TRUNC('month', CURRENT_DATE)
+    `);
+
+    // Rooms
+    const totalRooms = await pool.query(`
+      SELECT COUNT(*)::int AS count
+      FROM rooms
+    `);
+
+    // Current Penalties
+    const activePenalties = await pool.query(`
+      SELECT COUNT(*)::int AS count
+      FROM billings
+      WHERE late_fee > 0
+      AND status IN ('Pending', 'Partial', 'Overdue')
+    `);
+
+    // Previous Month Penalties
+    const previousPenalties = await pool.query(`
+      SELECT COUNT(*)::int AS count
+      FROM billings
+      WHERE late_fee > 0
+      AND status IN ('Pending', 'Partial', 'Overdue')
+      AND created_at < DATE_TRUNC('month', CURRENT_DATE)
+    `);
+
+    // Revenue
+    const revenue = await pool.query(`
+      SELECT
+        COALESCE(SUM(
+          CASE
+            WHEN DATE_TRUNC('month', created_at) =
+                 DATE_TRUNC('month', CURRENT_DATE)
+            THEN paid_amount
+            ELSE 0
+          END
+        ),0) AS current_month,
+
+        COALESCE(SUM(
+          CASE
+            WHEN DATE_TRUNC('month', created_at) =
+                 DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+            THEN paid_amount
+            ELSE 0
+          END
+        ),0) AS previous_month
+      FROM billings
+      WHERE status = 'Paid'
+    `);
+
+    const boardersCurrent = Number(currentBoarders.rows[0].count);
+    const boardersPrevious = Number(previousBoarders.rows[0].count);
+
+    const penaltiesCurrent = Number(activePenalties.rows[0].count);
+    const penaltiesPrevious = Number(previousPenalties.rows[0].count);
+
+    const revenueCurrent = Number(revenue.rows[0].current_month);
+    const revenuePrevious = Number(revenue.rows[0].previous_month);
+
+    const calculateDelta = (
+      current: number,
+      previous: number
+    ): number => {
+      if (previous === 0) return 0;
+
+      return Number(
+        (((current - previous) / previous) * 100).toFixed(1)
+      );
+    };
+
+    res.json({
+      totalBoarders: {
+        value: boardersCurrent,
+        delta: calculateDelta(boardersCurrent, boardersPrevious),
+      },
+
+      totalRooms: {
+        value: Number(totalRooms.rows[0].count),
+        delta: 0, // rooms rarely change monthly
+      },
+
+      activePenalties: {
+        value: penaltiesCurrent,
+        delta: calculateDelta(
+          penaltiesCurrent,
+          penaltiesPrevious
+        ),
+      },
+
+      monthlyRevenue: {
+        value: revenueCurrent,
+        delta: calculateDelta(
+          revenueCurrent,
+          revenuePrevious
+        ),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      message: "Failed to load dashboard stats",
+    });
   }
 };
