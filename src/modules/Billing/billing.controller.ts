@@ -1031,7 +1031,6 @@ export const getMyPendingBilling = async (
     }
 };
 
-
 export const getMyPaymentHistory = async (
     req: AuthRequest,
     res: Response
@@ -1155,31 +1154,57 @@ export const getPaymentsOverview = async (
     res: Response
 ) => {
     try {
+
         const result = await pool.query(`
-      SELECT
-          DATE(bp.received_at) AS payment_date,
-          TO_CHAR(bp.received_at, 'Mon DD') AS date,
-          SUM(bp.amount) AS value
+            SELECT
+                DATE(bp.received_at) AS payment_date,
 
-      FROM billing_payments bp
+                TO_CHAR(
+                    bp.received_at,
+                    'Mon DD'
+                ) AS date,
 
-      WHERE
-          DATE_TRUNC('month', bp.received_at) =
-          DATE_TRUNC('month', CURRENT_DATE)
+                COALESCE(
+                    SUM(bp.amount),
+                    0
+                ) AS value
 
-      GROUP BY
-          DATE(bp.received_at),
-          TO_CHAR(bp.received_at, 'Mon DD')
+            FROM billing_payments bp
 
-      ORDER BY
-          DATE(bp.received_at)
-    `);
+            WHERE bp.status IN ('Paid', 'Partial')
 
-        return res.status(200).json(result.rows);
+            AND DATE_TRUNC(
+                'month',
+                bp.received_at
+            ) = DATE_TRUNC(
+                'month',
+                CURRENT_DATE
+            )
+
+            GROUP BY
+                DATE(bp.received_at),
+                TO_CHAR(
+                    bp.received_at,
+                    'Mon DD'
+                )
+
+            ORDER BY
+                DATE(bp.received_at)
+        `);
+
+        return res.status(200).json(
+            result.rows.map(row => ({
+                ...row,
+                value: Number(row.value),
+            }))
+        );
 
     } catch (error) {
 
-        console.error("Payments Overview:", error);
+        console.error(
+            "Payments Overview Error:",
+            error
+        );
 
         return res.status(500).json({
             message: "Server error.",
@@ -1187,7 +1212,6 @@ export const getPaymentsOverview = async (
 
     }
 };
-
 
 export const getCalendarEvents = async (
     req: Request,
@@ -1481,11 +1505,11 @@ export const getBillingStats = async (
     res: Response
 ) => {
     try {
+
         const result = await pool.query(`
             WITH current_month AS (
                 SELECT
 
-                    -- Total income already stored in billing_payments
                     (
                         SELECT COALESCE(
                             SUM(amount),
@@ -1495,13 +1519,11 @@ export const getBillingStats = async (
                         WHERE status IN ('Paid', 'Partial')
                     ) AS total_income,
 
-                    -- Payments received this month only
                     COALESCE(
                         SUM(bp.amount),
                         0
                     ) AS collected_this_month,
 
-                    -- Late fees collected this month
                     (
                         SELECT COALESCE(
                             SUM(late_fee),
@@ -1570,54 +1592,78 @@ export const getBillingStats = async (
                 SELECT
                     ROUND(
                         (
-                            SUM(paid_amount)
-                            /
-                            NULLIF(
-                                SUM(total_amount),
-                                0
-                            )
-                        ) * 100,
-                        2
-                    ) AS rate
-                FROM billings
-                WHERE status <> 'Cancelled'
-            ),
-
-            previous_collection_rate AS (
-                SELECT
-                    ROUND(
-                        (
-                            SUM(
-                                CASE
-                                    WHEN updated_at <
-                                    DATE_TRUNC(
+                            COALESCE(
+                                (
+                                    SELECT SUM(amount)
+                                    FROM billing_payments
+                                    WHERE status IN ('Paid', 'Partial')
+                                    AND DATE_TRUNC(
+                                        'month',
+                                        received_at
+                                    ) = DATE_TRUNC(
                                         'month',
                                         CURRENT_DATE
                                     )
-                                    THEN paid_amount
-                                    ELSE 0
-                                END
+                                ),
+                                0
                             )
                             /
                             NULLIF(
-                                SUM(
-                                    CASE
-                                        WHEN updated_at <
-                                        DATE_TRUNC(
-                                            'month',
-                                            CURRENT_DATE
-                                        )
-                                        THEN total_amount
-                                        ELSE 0
-                                    END
+                                (
+                                    SELECT SUM(total_amount)
+                                    FROM billings
+                                    WHERE DATE_TRUNC(
+                                        'month',
+                                        due_date
+                                    ) = DATE_TRUNC(
+                                        'month',
+                                        CURRENT_DATE
+                                    )
                                 ),
                                 0
                             )
                         ) * 100,
                         2
                     ) AS rate
-                FROM billings
-                WHERE status <> 'Cancelled'
+            ),
+
+            previous_collection_rate AS (
+                SELECT
+                    ROUND(
+                        (
+                            COALESCE(
+                                (
+                                    SELECT SUM(amount)
+                                    FROM billing_payments
+                                    WHERE status IN ('Paid', 'Partial')
+                                    AND DATE_TRUNC(
+                                        'month',
+                                        received_at
+                                    ) = DATE_TRUNC(
+                                        'month',
+                                        CURRENT_DATE - INTERVAL '1 month'
+                                    )
+                                ),
+                                0
+                            )
+                            /
+                            NULLIF(
+                                (
+                                    SELECT SUM(total_amount)
+                                    FROM billings
+                                    WHERE DATE_TRUNC(
+                                        'month',
+                                        due_date
+                                    ) = DATE_TRUNC(
+                                        'month',
+                                        CURRENT_DATE - INTERVAL '1 month'
+                                    )
+                                ),
+                                0
+                            )
+                        ) * 100,
+                        2
+                    ) AS rate
             )
 
             SELECT
@@ -1678,12 +1724,12 @@ export const getBillingStats = async (
                 ),
 
             collectionRate:
-                Number(stats.collection_rate),
+                Number(stats.collection_rate || 0),
 
             collectionRateChange:
                 calculateChange(
-                    Number(stats.collection_rate),
-                    Number(stats.previous_collection_rate)
+                    Number(stats.collection_rate || 0),
+                    Number(stats.previous_collection_rate || 0)
                 ),
         });
 
@@ -1837,6 +1883,177 @@ export const getRevenueTrend = async (
 
         console.error(
             "Revenue Trend Error:",
+            error
+        );
+
+        return res.status(500).json({
+            message: "Server error.",
+        });
+    }
+};
+
+
+export const getDetailedSummary = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+        const result = await pool.query(`
+            WITH current_month AS (
+                SELECT
+                    COALESCE(
+                        SUM(amount),
+                        0
+                    ) AS total_income
+                FROM billing_payments
+                WHERE status IN ('Paid', 'Partial')
+                AND DATE_TRUNC(
+                    'month',
+                    received_at
+                ) = DATE_TRUNC(
+                    'month',
+                    CURRENT_DATE
+                )
+            ),
+
+            previous_month AS (
+                SELECT
+                    COALESCE(
+                        SUM(amount),
+                        0
+                    ) AS total_income
+                FROM billing_payments
+                WHERE status IN ('Paid', 'Partial')
+                AND DATE_TRUNC(
+                    'month',
+                    received_at
+                ) = DATE_TRUNC(
+                    'month',
+                    CURRENT_DATE - INTERVAL '1 month'
+                )
+            ),
+
+            current_late_fees AS (
+                SELECT
+                    COALESCE(
+                        SUM(late_fee),
+                        0
+                    ) AS late_fees
+                FROM billings
+                WHERE status = 'Paid'
+                AND DATE_TRUNC(
+                    'month',
+                    updated_at
+                ) = DATE_TRUNC(
+                    'month',
+                    CURRENT_DATE
+                )
+            ),
+
+            previous_late_fees AS (
+                SELECT
+                    COALESCE(
+                        SUM(late_fee),
+                        0
+                    ) AS late_fees
+                FROM billings
+                WHERE status = 'Paid'
+                AND DATE_TRUNC(
+                    'month',
+                    updated_at
+                ) = DATE_TRUNC(
+                    'month',
+                    CURRENT_DATE - INTERVAL '1 month'
+                )
+            )
+
+            SELECT
+                cm.total_income AS current_total_income,
+                pm.total_income AS previous_total_income,
+
+                clf.late_fees AS current_late_fees,
+                plf.late_fees AS previous_late_fees
+
+            FROM current_month cm
+            CROSS JOIN previous_month pm
+            CROSS JOIN current_late_fees clf
+            CROSS JOIN previous_late_fees plf
+        `);
+
+        const data = result.rows[0];
+
+        const calculateChange = (
+            current: number,
+            previous: number
+        ) => {
+            if (previous === 0) {
+                return current > 0 ? 100 : 0;
+            }
+
+            return Number(
+                (
+                    ((current - previous) /
+                        previous) *
+                    100
+                ).toFixed(2)
+            );
+        };
+
+        const totalIncomeCurrent =
+            Number(
+                data.current_total_income
+            );
+
+        const totalIncomePrevious =
+            Number(
+                data.previous_total_income
+            );
+
+        const lateFeesCurrent =
+            Number(
+                data.current_late_fees
+            );
+
+        const lateFeesPrevious =
+            Number(
+                data.previous_late_fees
+            );
+
+        return res.status(200).json([
+            {
+                category: "Total Income",
+                thisMonth:
+                    totalIncomeCurrent,
+                lastMonth:
+                    totalIncomePrevious,
+                change:
+                    calculateChange(
+                        totalIncomeCurrent,
+                        totalIncomePrevious
+                    ),
+                positive:
+                    totalIncomeCurrent >=
+                    totalIncomePrevious,
+            },
+            {
+                category: "Late Fees",
+                thisMonth:
+                    lateFeesCurrent,
+                lastMonth:
+                    lateFeesPrevious,
+                change:
+                    calculateChange(
+                        lateFeesCurrent,
+                        lateFeesPrevious
+                    ),
+                positive:
+                    lateFeesCurrent >=
+                    lateFeesPrevious,
+            },
+        ]);
+    } catch (error) {
+        console.error(
+            "Detailed Summary Error:",
             error
         );
 

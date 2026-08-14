@@ -14,7 +14,8 @@ import {
     cancelBilling,
     getBillingStats,
     getIncomeMix,
-    getRevenueTrend
+    getRevenueTrend,
+    getDetailedSummary,
 } from "./billing.controller"
 import express from "express"
 import { checkAuth } from "../../middleware/checkAuth"
@@ -37,4 +38,6 @@ router.put("/cancel-billing/:id", checkAuth, cancelBilling);
 router.get("/stats", checkAuth, getBillingStats);
 router.get("/income-mix", checkAuth, getIncomeMix);
 router.get("/revenue-trend", checkAuth, getRevenueTrend);
+router.get("/detailed-summary", checkAuth, getDetailedSummary);
+
 export default router
