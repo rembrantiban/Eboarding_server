@@ -1062,13 +1062,7 @@ export const getMyPaymentHistory = async (
             bp.status,
             bp.reason,
             bp.notes,
-
-           CASE
-                WHEN bp.status = 'Cancelled'
-                THEN b.total_amount
-                ELSE bp.amount
-            END AS amount,
-
+            bp.amount,
             bp.received_at,
 
             b.billing_no,
