@@ -1674,45 +1674,41 @@ export const getIncomeMix = async (
     res: Response
 ) => {
     try {
-
         const result = await pool.query(`
             SELECT
                 COALESCE(SUM(room_fee), 0) AS room_fees,
                 COALESCE(SUM(late_fee), 0) AS late_fees
-
             FROM billings
-
             WHERE status = 'Paid'
         `);
 
         const row = result.rows[0];
 
+        const roomFees = Number(row.room_fees);
+        const lateFees = Number(row.late_fees);
+
+        const totalIncome = roomFees + lateFees;
+
         const incomeMix = [
             {
-                name: "Room fees",
-                value: Number(row.room_fees),
+                name: "Total Income",
+                value: totalIncome,
                 color: "#0f172a",
             },
             {
-                name: "Late fees",
-                value: Number(row.late_fees),
+                name: "Late Fees",
+                value: lateFees,
                 color: "#94a3b8",
             },
         ];
 
         return res.status(200).json(incomeMix);
-
     } catch (error) {
-
-        console.error(
-            "Get Income Mix Error:",
-            error
-        );
+        console.error("Get Income Mix Error:", error);
 
         return res.status(500).json({
             message: "Server error.",
         });
-
     }
 };
 
