@@ -1058,6 +1058,8 @@ export const getMyPaymentHistory = async (
 
             bp.billing_id,
             bp.status,
+            bp.reason,
+            bp.notes,
             bp.amount,
             bp.received_at,
 
