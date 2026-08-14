@@ -1476,7 +1476,6 @@ export const cancelBilling = async (
 
 };
 
-
 export const getBillingStats = async (
     req: Request,
     res: Response
@@ -1486,41 +1485,58 @@ export const getBillingStats = async (
         const result = await pool.query(`
             WITH current_month AS (
                 SELECT
-                    COALESCE(SUM(amount), 0) AS total_income,
+                    COALESCE(SUM(bp.amount), 0) AS total_income,
+
                     COALESCE(
                         SUM(
                             CASE
-                                WHEN status IN ('Paid', 'Partial')
-                                THEN amount
+                                WHEN bp.status IN ('Paid', 'Partial')
+                                THEN bp.amount
                                 ELSE 0
                             END
                         ),
                         0
-                    ) AS collected_this_month
-                FROM billing_payments
-                WHERE DATE_TRUNC('month', received_at) =
+                    ) AS collected_this_month,
+
+                    COALESCE(SUM(b.late_fee), 0) AS late_fees_collected
+
+                FROM billing_payments bp
+                LEFT JOIN billings b
+                    ON b.id = bp.billing_id
+
+                WHERE DATE_TRUNC('month', bp.received_at) =
                       DATE_TRUNC('month', CURRENT_DATE)
             ),
 
             previous_month AS (
                 SELECT
-                    COALESCE(SUM(amount), 0) AS total_income
-                FROM billing_payments
-                WHERE DATE_TRUNC('month', received_at) =
+                    COALESCE(SUM(bp.amount), 0) AS total_income,
+
+                    COALESCE(
+                        SUM(
+                            CASE
+                                WHEN bp.status IN ('Paid', 'Partial')
+                                THEN bp.amount
+                                ELSE 0
+                            END
+                        ),
+                        0
+                    ) AS collected_this_month,
+
+                    COALESCE(SUM(b.late_fee), 0) AS late_fees_collected
+
+                FROM billing_payments bp
+                LEFT JOIN billings b
+                    ON b.id = bp.billing_id
+
+                WHERE DATE_TRUNC('month', bp.received_at) =
                       DATE_TRUNC(
-                        'month',
-                        CURRENT_DATE - INTERVAL '1 month'
+                          'month',
+                          CURRENT_DATE - INTERVAL '1 month'
                       )
             ),
 
-            late_fees AS (
-                SELECT
-                    COALESCE(SUM(late_fee), 0) AS late_fees_collected
-                FROM billings
-                WHERE status = 'Paid'
-            ),
-
-            collection_rate AS (
+            current_collection_rate AS (
                 SELECT
                     ROUND(
                         (
@@ -1531,18 +1547,55 @@ export const getBillingStats = async (
                     ) AS rate
                 FROM billings
                 WHERE status <> 'Cancelled'
+            ),
+
+            previous_collection_rate AS (
+                SELECT
+                    ROUND(
+                        (
+                            SUM(
+                                CASE
+                                    WHEN updated_at <
+                                    DATE_TRUNC('month', CURRENT_DATE)
+                                    THEN paid_amount
+                                    ELSE 0
+                                END
+                            )
+                            /
+                            NULLIF(
+                                SUM(
+                                    CASE
+                                        WHEN updated_at <
+                                        DATE_TRUNC('month', CURRENT_DATE)
+                                        THEN total_amount
+                                        ELSE 0
+                                    END
+                                ),
+                                0
+                            )
+                        ) * 100,
+                        2
+                    ) AS rate
+                FROM billings
+                WHERE status <> 'Cancelled'
             )
 
             SELECT
                 cm.total_income,
                 cm.collected_this_month,
+                cm.late_fees_collected,
+
                 pm.total_income AS previous_income,
-                lf.late_fees_collected,
-                cr.rate AS collection_rate
+                pm.collected_this_month AS previous_collected,
+                pm.late_fees_collected AS previous_late_fees,
+
+                ccr.rate AS collection_rate,
+                pcr.rate AS previous_collection_rate
+
             FROM current_month cm
             CROSS JOIN previous_month pm
-            CROSS JOIN late_fees lf
-            CROSS JOIN collection_rate cr;
+            CROSS JOIN current_collection_rate ccr
+            CROSS JOIN previous_collection_rate pcr
         `);
 
         const stats = result.rows[0];
@@ -1552,7 +1605,9 @@ export const getBillingStats = async (
             previous: number
         ) => {
 
-            if (previous === 0) return 0;
+            if (previous === 0) {
+                return current > 0 ? 100 : 0;
+            }
 
             return Number(
                 (
@@ -1574,16 +1629,37 @@ export const getBillingStats = async (
             lateFeesCollected:
                 Number(stats.late_fees_collected),
 
+            lateFeesChange:
+                calculateChange(
+                    Number(stats.late_fees_collected),
+                    Number(stats.previous_late_fees)
+                ),
+
             amountCollectedThisMonth:
                 Number(stats.collected_this_month),
 
+            amountCollectedChange:
+                calculateChange(
+                    Number(stats.collected_this_month),
+                    Number(stats.previous_collected)
+                ),
+
             collectionRate:
                 Number(stats.collection_rate),
+
+            collectionRateChange:
+                calculateChange(
+                    Number(stats.collection_rate),
+                    Number(stats.previous_collection_rate)
+                ),
         });
 
     } catch (error) {
 
-        console.error("Billing Stats Error:", error);
+        console.error(
+            "Billing Stats Error:",
+            error
+        );
 
         return res.status(500).json({
             message: "Server error.",
