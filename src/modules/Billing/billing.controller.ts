@@ -2000,57 +2000,63 @@ export const getDetailedSummary = async (
         };
 
         const totalIncomeCurrent =
-            Number(
-                data.current_total_income
-            );
+            Number(data.current_total_income);
 
         const totalIncomePrevious =
-            Number(
-                data.previous_total_income
-            );
+            Number(data.previous_total_income);
 
         const lateFeesCurrent =
-            Number(
-                data.current_late_fees
-            );
+            Number(data.current_late_fees);
 
         const lateFeesPrevious =
-            Number(
-                data.previous_late_fees
-            );
+            Number(data.previous_late_fees);
 
-        return res.status(200).json([
-            {
-                category: "Total Income",
-                thisMonth:
+        return res.status(200).json({
+            totalIncomeThisMonth:
+                totalIncomeCurrent,
+
+            totalIncomeLastMonth:
+                totalIncomePrevious,
+
+            totalIncomeChange:
+                calculateChange(
                     totalIncomeCurrent,
-                lastMonth:
-                    totalIncomePrevious,
-                change:
-                    calculateChange(
+                    totalIncomePrevious
+                ),
+
+            rows: [
+                {
+                    category: "Total Income",
+                    thisMonth:
                         totalIncomeCurrent,
-                        totalIncomePrevious
-                    ),
-                positive:
-                    totalIncomeCurrent >=
-                    totalIncomePrevious,
-            },
-            {
-                category: "Late Fees",
-                thisMonth:
-                    lateFeesCurrent,
-                lastMonth:
-                    lateFeesPrevious,
-                change:
-                    calculateChange(
+                    lastMonth:
+                        totalIncomePrevious,
+                    change:
+                        calculateChange(
+                            totalIncomeCurrent,
+                            totalIncomePrevious
+                        ),
+                    positive:
+                        totalIncomeCurrent >=
+                        totalIncomePrevious,
+                },
+                {
+                    category: "Late Fees",
+                    thisMonth:
                         lateFeesCurrent,
-                        lateFeesPrevious
-                    ),
-                positive:
-                    lateFeesCurrent >=
-                    lateFeesPrevious,
-            },
-        ]);
+                    lastMonth:
+                        lateFeesPrevious,
+                    change:
+                        calculateChange(
+                            lateFeesCurrent,
+                            lateFeesPrevious
+                        ),
+                    positive:
+                        lateFeesCurrent >=
+                        lateFeesPrevious,
+                },
+            ],
+        });
     } catch (error) {
         console.error(
             "Detailed Summary Error:",
