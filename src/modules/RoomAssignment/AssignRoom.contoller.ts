@@ -877,70 +877,75 @@ export const checkoutAssignment = async (
     const current = assignment.rows[0];
 
     /**
-     * Check for unsettled billings
+     * Check for any unpaid billing
+     * Previous Months + Current Month
+     *
+     * Ignore:
+     * - Future billings
+     * - Cancelled billings
+     * - Fully paid billings
      */
     const outstandingBillings = await client.query(
       `
       SELECT
+        id,
         billing_no,
+        billing_month,
         status,
+        total_amount,
+        paid_amount,
         balance,
         due_date
       FROM billings
       WHERE user_id = $1
-      AND status IN (
-        'Upcoming',
-        'Pending',
-        'Partial',
-        'Overdue'
-      )
-      ORDER BY due_date ASC
+        AND balance > 0
+        AND status <> 'Cancelled'
+        AND billing_month <= DATE_TRUNC('month', CURRENT_DATE)
+      ORDER BY billing_month ASC
       `,
       [current.user_id]
     );
 
     if (outstandingBillings.rows.length > 0) {
-      const totalBalance = outstandingBillings.rows.reduce(
-        (sum, billing) =>
-          sum + Number(billing.balance),
-        0
-      );
+      const totalBalance =
+        outstandingBillings.rows.reduce(
+          (sum, billing) =>
+            sum + Number(billing.balance),
+          0
+        );
 
       await client.query("ROLLBACK");
 
       return res.status(400).json({
-        message: `Cannot checkout. Boarder has ${outstandingBillings.rows.length} unsettled billing(s) with a total outstanding balance of ₱${totalBalance.toLocaleString(
-          "en-PH",
-          {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          }
-        )}.`,
+        message:
+          "Cannot checkout. Boarder still has unpaid billing balances.",
+
         summary: {
           unpaid_billings:
             outstandingBillings.rows.length,
           total_balance: totalBalance,
         },
+
         billings: outstandingBillings.rows,
       });
     }
 
     /**
-     * Mark assignment as checked out
+     * Checkout Assignment
      */
     await client.query(
       `
       UPDATE room_assignments
       SET
         status = 'Checked-Out',
-        actual_checkout = NOW()
+        actual_checkout = CURRENT_DATE
       WHERE id = $1
       `,
       [id]
     );
 
     /**
-     * Update user
+     * Remove boarder assignment flag
      */
     await client.query(
       `
@@ -964,7 +969,7 @@ export const checkoutAssignment = async (
     );
 
     /**
-     * Recalculate room status
+     * Update room status
      */
     await updateRoomStatus(
       client,
@@ -979,7 +984,6 @@ export const checkoutAssignment = async (
     });
 
   } catch (err) {
-
     await client.query("ROLLBACK");
 
     console.error(err);
@@ -989,9 +993,7 @@ export const checkoutAssignment = async (
     });
 
   } finally {
-
     client.release();
-
   }
 };
 

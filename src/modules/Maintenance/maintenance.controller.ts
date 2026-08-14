@@ -868,3 +868,64 @@ export const getBoarderRequests = async (
     });
   }
 };
+
+export const getAllStaffAssignedMaintenance = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+
+    const result = await pool.query(
+      `
+      SELECT
+        mr.id,
+
+        mr.category AS title,
+
+        r.room_number AS room,
+
+        CONCAT(
+          u.first_name,
+          ' ',
+          u.last_name
+        ) AS reporter,
+
+        CONCAT(
+          staff.first_name,
+          ' ',
+          staff.last_name
+        ) AS assigned_staff,
+
+        mr.status,
+
+        mr.created_at
+
+      FROM maintenance_requests mr
+
+      JOIN users u
+        ON u.id = mr.user_id
+
+      JOIN rooms r
+        ON r.id = mr.room_id
+
+      LEFT JOIN users staff
+        ON staff.id = mr.assigned_staff_id
+
+      WHERE mr.assigned_staff_id IS NOT NULL
+
+      ORDER BY mr.created_at DESC
+      `
+    );
+
+    return res.json(result.rows);
+
+  } catch (error) {
+
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+
+  }
+};
