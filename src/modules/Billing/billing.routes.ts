@@ -12,6 +12,9 @@ import {
     getCalendarEvents,
     getAllActivePenalties,
     cancelBilling,
+    getBillingStats,
+    getIncomeMix,
+    getRevenueTrend
 } from "./billing.controller"
 import express from "express"
 import { checkAuth } from "../../middleware/checkAuth"
@@ -31,5 +34,7 @@ router.get("/payments-overview", checkAuth, getPaymentsOverview);
 router.get("/calendar-events",checkAuth, getCalendarEvents);
 router.get("/all-active-penalties", checkAuth, getAllActivePenalties);
 router.put("/cancel-billing/:id", checkAuth, cancelBilling);
-
+router.get("/stats", checkAuth, getBillingStats);
+router.get("/income-mix", checkAuth, getIncomeMix);
+router.get("/revenue-trend", checkAuth, getRevenueTrend);
 export default router

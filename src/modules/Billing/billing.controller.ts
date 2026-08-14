@@ -1475,3 +1475,241 @@ export const cancelBilling = async (
     }
 
 };
+
+
+export const getBillingStats = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+
+        const result = await pool.query(`
+            WITH current_month AS (
+                SELECT
+                    COALESCE(SUM(amount), 0) AS total_income,
+                    COALESCE(
+                        SUM(
+                            CASE
+                                WHEN status IN ('Paid', 'Partial')
+                                THEN amount
+                                ELSE 0
+                            END
+                        ),
+                        0
+                    ) AS collected_this_month
+                FROM billing_payments
+                WHERE DATE_TRUNC('month', received_at) =
+                      DATE_TRUNC('month', CURRENT_DATE)
+            ),
+
+            previous_month AS (
+                SELECT
+                    COALESCE(SUM(amount), 0) AS total_income
+                FROM billing_payments
+                WHERE DATE_TRUNC('month', received_at) =
+                      DATE_TRUNC(
+                        'month',
+                        CURRENT_DATE - INTERVAL '1 month'
+                      )
+            ),
+
+            late_fees AS (
+                SELECT
+                    COALESCE(SUM(late_fee), 0) AS late_fees_collected
+                FROM billings
+                WHERE status = 'Paid'
+            ),
+
+            collection_rate AS (
+                SELECT
+                    ROUND(
+                        (
+                            SUM(paid_amount) /
+                            NULLIF(SUM(total_amount), 0)
+                        ) * 100,
+                        2
+                    ) AS rate
+                FROM billings
+                WHERE status <> 'Cancelled'
+            )
+
+            SELECT
+                cm.total_income,
+                cm.collected_this_month,
+                pm.total_income AS previous_income,
+                lf.late_fees_collected,
+                cr.rate AS collection_rate
+            FROM current_month cm
+            CROSS JOIN previous_month pm
+            CROSS JOIN late_fees lf
+            CROSS JOIN collection_rate cr;
+        `);
+
+        const stats = result.rows[0];
+
+        const calculateChange = (
+            current: number,
+            previous: number
+        ) => {
+
+            if (previous === 0) return 0;
+
+            return Number(
+                (
+                    ((current - previous) / previous) *
+                    100
+                ).toFixed(1)
+            );
+        };
+
+        return res.status(200).json({
+            totalIncome: Number(stats.total_income),
+
+            totalIncomeChange:
+                calculateChange(
+                    Number(stats.total_income),
+                    Number(stats.previous_income)
+                ),
+
+            lateFeesCollected:
+                Number(stats.late_fees_collected),
+
+            amountCollectedThisMonth:
+                Number(stats.collected_this_month),
+
+            collectionRate:
+                Number(stats.collection_rate),
+        });
+
+    } catch (error) {
+
+        console.error("Billing Stats Error:", error);
+
+        return res.status(500).json({
+            message: "Server error.",
+        });
+
+    }
+};
+
+
+export const getIncomeMix = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+
+        const result = await pool.query(`
+            SELECT
+                COALESCE(SUM(room_fee), 0) AS room_fees,
+                COALESCE(SUM(late_fee), 0) AS late_fees
+
+            FROM billings
+
+            WHERE status = 'Paid'
+        `);
+
+        const row = result.rows[0];
+
+        const incomeMix = [
+            {
+                name: "Room fees",
+                value: Number(row.room_fees),
+                color: "#0f172a",
+            },
+            {
+                name: "Late fees",
+                value: Number(row.late_fees),
+                color: "#94a3b8",
+            },
+        ];
+
+        return res.status(200).json(incomeMix);
+
+    } catch (error) {
+
+        console.error(
+            "Get Income Mix Error:",
+            error
+        );
+
+        return res.status(500).json({
+            message: "Server error.",
+        });
+
+    }
+};
+
+export const getRevenueTrend = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+
+        const result = await pool.query(`
+            SELECT
+                TO_CHAR(
+                    DATE_TRUNC('month', bp.received_at),
+                    'Mon'
+                ) AS month,
+
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN bp.status IN ('Paid', 'Partial')
+                            THEN bp.amount
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ) AS income,
+
+                COALESCE(
+                    SUM(b.late_fee),
+                    0
+                ) AS late_fees,
+
+                DATE_TRUNC(
+                    'month',
+                    bp.received_at
+                ) AS month_sort
+
+            FROM billing_payments bp
+
+            INNER JOIN billings b
+                ON b.id = bp.billing_id
+
+            WHERE bp.received_at >=
+                DATE_TRUNC(
+                    'month',
+                    CURRENT_DATE - INTERVAL '5 months'
+                )
+
+            GROUP BY
+                DATE_TRUNC('month', bp.received_at)
+
+            ORDER BY
+                month_sort ASC
+        `);
+
+        return res.status(200).json(
+            result.rows.map(row => ({
+                month: row.month.trim(),
+                income: Number(row.income),
+                lateFees: Number(row.late_fees),
+            }))
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Revenue Trend Error:",
+            error
+        );
+
+        return res.status(500).json({
+            message: "Server error.",
+        });
+
+    }
+};
