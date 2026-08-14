@@ -876,19 +876,72 @@ export const checkoutAssignment = async (
 
     const current = assignment.rows[0];
 
-    // Mark assignment as checked out
+    /**
+     * Check for unsettled billings
+     */
+    const outstandingBillings = await client.query(
+      `
+      SELECT
+        billing_no,
+        status,
+        balance,
+        due_date
+      FROM billings
+      WHERE user_id = $1
+      AND status IN (
+        'Upcoming',
+        'Pending',
+        'Partial',
+        'Overdue'
+      )
+      ORDER BY due_date ASC
+      `,
+      [current.user_id]
+    );
+
+    if (outstandingBillings.rows.length > 0) {
+      const totalBalance = outstandingBillings.rows.reduce(
+        (sum, billing) =>
+          sum + Number(billing.balance),
+        0
+      );
+
+      await client.query("ROLLBACK");
+
+      return res.status(400).json({
+        message: `Cannot checkout. Boarder has ${outstandingBillings.rows.length} unsettled billing(s) with a total outstanding balance of ₱${totalBalance.toLocaleString(
+          "en-PH",
+          {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          }
+        )}.`,
+        summary: {
+          unpaid_billings:
+            outstandingBillings.rows.length,
+          total_balance: totalBalance,
+        },
+        billings: outstandingBillings.rows,
+      });
+    }
+
+    /**
+     * Mark assignment as checked out
+     */
     await client.query(
       `
       UPDATE room_assignments
       SET
-          status = 'Checked-Out',
-          actual_checkout = NOW()
+        status = 'Checked-Out',
+        actual_checkout = NOW()
       WHERE id = $1
       `,
       [id]
     );
 
-    // Update user
+    /**
+     * Update user
+     */
     await client.query(
       `
       UPDATE users
@@ -898,7 +951,9 @@ export const checkoutAssignment = async (
       [current.user_id]
     );
 
-    // Free bed
+    /**
+     * Free bed
+     */
     await client.query(
       `
       UPDATE beds
@@ -908,13 +963,19 @@ export const checkoutAssignment = async (
       [current.bed_id]
     );
 
-    // Recalculate room status
-    await updateRoomStatus(client, current.room_id);
+    /**
+     * Recalculate room status
+     */
+    await updateRoomStatus(
+      client,
+      current.room_id
+    );
 
     await client.query("COMMIT");
 
     return res.json({
-      message: "Boarder checked out successfully.",
+      message:
+        "Boarder checked out successfully.",
     });
 
   } catch (err) {
