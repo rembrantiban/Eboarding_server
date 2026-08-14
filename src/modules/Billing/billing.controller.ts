@@ -1488,7 +1488,7 @@ export const getBillingStats = async (
                     COALESCE(
                         SUM(
                             CASE
-                                WHEN bp.status = 'Paid'
+                                WHEN bp.status IN ('Paid', 'Partial')
                                 THEN bp.amount
                                 ELSE 0
                             END
@@ -1499,7 +1499,7 @@ export const getBillingStats = async (
                     COALESCE(
                         SUM(
                             CASE
-                                WHEN bp.status = 'Paid'
+                                WHEN bp.status IN ('Paid', 'Partial')
                                 THEN bp.amount
                                 ELSE 0
                             END
@@ -1539,7 +1539,7 @@ export const getBillingStats = async (
                     COALESCE(
                         SUM(
                             CASE
-                                WHEN bp.status = 'Paid'
+                                WHEN bp.status IN ('Paid', 'Partial')
                                 THEN bp.amount
                                 ELSE 0
                             END
@@ -1550,7 +1550,7 @@ export const getBillingStats = async (
                     COALESCE(
                         SUM(
                             CASE
-                                WHEN bp.status = 'Paid'
+                                WHEN bp.status IN ('Paid', 'Partial')
                                 THEN bp.amount
                                 ELSE 0
                             END
@@ -1573,8 +1573,7 @@ export const getBillingStats = async (
                             CURRENT_DATE - INTERVAL '1 month'
                         )
                     ) AS late_fees_collected
-
-                FROM billing_payments bp
+            FROM billing_payments bp
 
                 WHERE DATE_TRUNC(
                     'month',
@@ -1739,7 +1738,7 @@ export const getIncomeMix = async (
                         0
                     )
                     FROM billing_payments
-                    WHERE status = 'Paid'
+                    WHERE status IN ('Paid', 'Partial')
                 ) AS total_income,
 
                 (
@@ -1785,14 +1784,17 @@ export const getRevenueTrend = async (
         const result = await pool.query(`
             SELECT
                 TO_CHAR(
-                    DATE_TRUNC('month', bp.received_at),
+                    DATE_TRUNC(
+                        'month',
+                        bp.received_at
+                    ),
                     'Mon'
                 ) AS month,
 
                 COALESCE(
                     SUM(
                         CASE
-                            WHEN bp.status IN ('Paid', 'Partial')
+                            WHEN bp.status = 'Paid'
                             THEN bp.amount
                             ELSE 0
                         END
@@ -1802,8 +1804,8 @@ export const getRevenueTrend = async (
 
                 COALESCE(
                     SUM(
-                        DISTINCT CASE
-                            WHEN b.status = 'Paid'
+                        CASE
+                            WHEN bp.status = 'Paid'
                             THEN b.late_fee
                             ELSE 0
                         END
@@ -1817,7 +1819,8 @@ export const getRevenueTrend = async (
                 ) AS month_sort
 
             FROM billing_payments bp
-            INNER JOIN billings b
+
+            LEFT JOIN billings b
                 ON b.id = bp.billing_id
 
             WHERE bp.received_at >=
@@ -1827,7 +1830,10 @@ export const getRevenueTrend = async (
                 )
 
             GROUP BY
-                DATE_TRUNC('month', bp.received_at)
+                DATE_TRUNC(
+                    'month',
+                    bp.received_at
+                )
 
             ORDER BY
                 month_sort ASC
@@ -1842,7 +1848,11 @@ export const getRevenueTrend = async (
         );
 
     } catch (error) {
-        console.error("Revenue Trend Error:", error);
+
+        console.error(
+            "Revenue Trend Error:",
+            error
+        );
 
         return res.status(500).json({
             message: "Server error.",
