@@ -797,7 +797,7 @@ export const getPaymentHistory = async (
                 ON receiver.id = bp.received_by
 
             WHERE bp.status IN
-            (
+            (   'Cancelled',
                 'Partial',
                 'Paid'
             )
@@ -1125,7 +1125,7 @@ export const getMyPaymentHistory = async (
         WHERE
             b.user_id = $1
         AND
-            bp.status IN ('Partial','Paid')
+            bp.status IN ('Cancelled','Partial','Paid')
 
         ORDER BY
             bp.received_at DESC,
