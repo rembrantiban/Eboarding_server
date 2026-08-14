@@ -1714,43 +1714,62 @@ export const getIncomeMix = async (
     try {
 
         const result = await pool.query(`
-            SELECT
-                (
-                    SELECT COALESCE(
+            WITH income_data AS (
+                SELECT
+                    COALESCE(
                         SUM(amount),
                         0
-                    )
-                    FROM billing_payments
-                    WHERE status IN ('Paid', 'Partial')
-                ) AS total_income,
+                    ) AS total_income
+                FROM billing_payments
+                WHERE status IN ('Paid', 'Partial')
+            ),
 
-                (
-                    SELECT COALESCE(
+            late_fee_data AS (
+                SELECT
+                    COALESCE(
                         SUM(late_fee),
                         0
-                    )
-                    FROM billings
-                    WHERE status = 'Paid'
-                ) AS late_fees
+                    ) AS late_fees
+                FROM billings
+                WHERE status = 'Paid'
+            )
+
+            SELECT
+                i.total_income,
+                l.late_fees
+            FROM income_data i
+            CROSS JOIN late_fee_data l
         `);
 
         const row = result.rows[0];
 
+        const totalIncome = Number(row.total_income);
+        const lateFees = Number(row.late_fees);
+
+        const roomIncome = Math.max(
+            totalIncome - lateFees,
+            0
+        );
+
         return res.status(200).json([
             {
-                name: "Total Income",
-                value: Number(row.total_income),
+                name: "Room Income",
+                value: roomIncome,
                 color: "#0f172a",
             },
             {
                 name: "Late Fees",
-                value: Number(row.late_fees),
+                value: lateFees,
                 color: "#94a3b8",
             },
         ]);
 
     } catch (error) {
-        console.error("Get Income Mix Error:", error);
+
+        console.error(
+            "Get Income Mix Error:",
+            error
+        );
 
         return res.status(500).json({
             message: "Server error.",
