@@ -1485,15 +1485,14 @@ export const getBillingStats = async (
         const result = await pool.query(`
             WITH current_month AS (
                 SELECT
-                    COALESCE(
-                        SUM(
-                            CASE
-                                WHEN bp.status IN ('Paid', 'Partial')
-                                THEN bp.amount
-                                ELSE 0
-                            END
-                        ),
-                        0
+
+                    (
+                        SELECT COALESCE(
+                            SUM(amount),
+                            0
+                        )
+                        FROM billing_payments
+                        WHERE status IN ('Paid', 'Partial')
                     ) AS total_income,
 
                     COALESCE(
@@ -1536,16 +1535,6 @@ export const getBillingStats = async (
 
             previous_month AS (
                 SELECT
-                    COALESCE(
-                        SUM(
-                            CASE
-                                WHEN bp.status IN ('Paid', 'Partial')
-                                THEN bp.amount
-                                ELSE 0
-                            END
-                        ),
-                        0
-                    ) AS total_income,
 
                     COALESCE(
                         SUM(
@@ -1573,7 +1562,8 @@ export const getBillingStats = async (
                             CURRENT_DATE - INTERVAL '1 month'
                         )
                     ) AS late_fees_collected
-            FROM billing_payments bp
+
+                FROM billing_payments bp
 
                 WHERE DATE_TRUNC(
                     'month',
@@ -1643,7 +1633,6 @@ export const getBillingStats = async (
                 cm.collected_this_month,
                 cm.late_fees_collected,
 
-                pm.total_income AS previous_income,
                 pm.collected_this_month AS previous_collected,
                 pm.late_fees_collected AS previous_late_fees,
 
@@ -1676,12 +1665,6 @@ export const getBillingStats = async (
 
         return res.status(200).json({
             totalIncome: Number(stats.total_income),
-
-            totalIncomeChange:
-                calculateChange(
-                    Number(stats.total_income),
-                    Number(stats.previous_income)
-                ),
 
             lateFeesCollected:
                 Number(stats.late_fees_collected),
