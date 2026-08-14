@@ -15,6 +15,11 @@ import {
   getBedOccupancyChart,
   getRoomOccupancyChart,
   getRoomAvailabilityBed,
+  getRoomReportStats,
+  getRoomStatusReport,
+  getRecentActivities,
+  getRoomReport,
+  getReportInsights
 } from "./room.controller";
 import { upload } from "../../lib/upload";
 import { checkAuth } from "../../middleware/checkAuth";
@@ -35,5 +40,10 @@ router.get("/availability-chart", checkAuth, getRoomAvailabilityChart);
 router.get("/bed-occupancy-chart", checkAuth, getBedOccupancyChart);
 router.get("/room-occupancy-chart", checkAuth, getRoomOccupancyChart);
 router.get("/room-availability-bed", checkAuth, getRoomAvailabilityBed);
+router.get("/room-report-stats", checkAuth, getRoomReportStats);
+router.get("/room-status-report", checkAuth, getRoomStatusReport);
+router.get("/recent-activities", checkAuth, getRecentActivities);
+router.get("/room-report", checkAuth, getRoomReport);
+router.get("/report-insights", checkAuth, getReportInsights);
 
   export default router;

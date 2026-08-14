@@ -1239,3 +1239,307 @@ export const getRoomAvailabilityBed = async (
     });
   }
 };
+
+export const getRoomReportStats = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        COUNT(*) AS total_rooms,
+
+        COUNT(*) FILTER (
+          WHERE status = 'Occupied'
+        ) AS occupied_rooms,
+
+        COUNT(*) FILTER (
+          WHERE status = 'Available'
+        ) AS available_rooms
+
+      FROM rooms
+    `);
+
+    const row = result.rows[0];
+
+    const totalRooms = Number(row.total_rooms);
+    const occupiedRooms = Number(row.occupied_rooms);
+    const availableRooms = Number(row.available_rooms);
+
+    const occupancyRate =
+      totalRooms > 0
+        ? ((occupiedRooms / totalRooms) * 100).toFixed(1)
+        : "0";
+
+    return res.json({
+      totalRooms,
+      occupiedRooms,
+      availableRooms,
+      occupancyRate,
+    });
+
+  } catch (error) {
+    console.error("Room Report Stats Error:", error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
+
+export const getRoomStatusReport = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (
+          WHERE status = 'Occupied'
+        ) AS occupied,
+
+        COUNT(*) FILTER (
+          WHERE status = 'Available'
+        ) AS available,
+
+        COUNT(*) FILTER (
+          WHERE status = 'Under Maintenance'
+        ) AS maintenance
+
+      FROM rooms
+    `);
+
+    const row = result.rows[0];
+
+    return res.json([
+      {
+        name: "Occupied",
+        value: Number(row.occupied),
+        color: "#2563eb",
+      },
+      {
+        name: "Available",
+        value: Number(row.available),
+        color: "#059669",
+      },
+      {
+        name: "Under Maintenance",
+        value: Number(row.maintenance),
+        color: "#d97706",
+      },
+    ]);
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
+
+export const getRecentActivities = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        ra.created_at,
+
+        CONCAT(
+          u.first_name,
+          ' ',
+          u.last_name
+        ) AS boarder,
+
+        r.room_number AS room,
+
+        b.bed_number AS bed,
+
+        ra.status AS action,
+
+        CONCAT(
+          au.first_name,
+          ' ',
+          au.last_name
+        ) AS assigned_by
+
+      FROM room_assignments ra
+
+      JOIN users u
+        ON ra.user_id = u.id
+
+      JOIN rooms r
+        ON ra.room_id = r.id
+
+      JOIN beds b
+        ON ra.bed_id = b.id
+
+      LEFT JOIN users au
+        ON ra.assigned_by = au.id
+
+      ORDER BY ra.created_at DESC
+
+      LIMIT 10
+    `);
+
+    return res.json(
+      result.rows.map((row) => ({
+        date: new Date(
+          row.created_at
+        ).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        }),
+
+        boarder: row.boarder,
+
+        room: row.room,
+
+        bed: row.bed,
+
+        action: row.action,
+
+        by: row.assigned_by || "System",
+      }))
+    );
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
+
+
+export const getRoomReport = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        r.id,
+        r.room_number,
+        r.capacity,
+        r.status,
+        r.created_at,
+
+        COUNT(b.id)
+          FILTER (
+            WHERE b.status = 'Occupied'
+          ) AS occupied,
+
+        COUNT(b.id)
+          FILTER (
+            WHERE b.status = 'Available'
+          ) AS available
+
+      FROM rooms r
+
+      LEFT JOIN beds b
+        ON b.room_id = r.id
+
+      GROUP BY
+        r.id,
+        r.room_number,
+        r.capacity,
+        r.status,
+        r.created_at
+
+      ORDER BY
+        r.room_number
+    `);
+
+    return res.json(
+      result.rows.map((room) => ({
+        number: room.room_number,
+        capacity: Number(room.capacity),
+        occupied: Number(room.occupied),
+        available: Number(room.available),
+        status: room.status,
+
+        date: new Date(
+          room.created_at
+        ).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        }),
+      }))
+    );
+
+  } catch (error) {
+    console.error("Room report error:", error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
+
+
+export const getReportInsights = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        COUNT(*) AS total_rooms,
+
+        COUNT(*) FILTER (
+          WHERE status = 'Occupied'
+        ) AS occupied_rooms,
+
+        COUNT(*) FILTER (
+          WHERE status = 'Available'
+        ) AS available_rooms,
+
+        COUNT(*) FILTER (
+          WHERE status = 'Under Maintenance'
+        ) AS maintenance_rooms
+
+      FROM rooms
+    `);
+
+    const row = result.rows[0];
+
+    const totalRooms = Number(row.total_rooms);
+    const occupiedRooms = Number(row.occupied_rooms);
+    const availableRooms = Number(row.available_rooms);
+    const maintenanceRooms = Number(row.maintenance_rooms);
+
+    const occupancyRate =
+      totalRooms > 0
+        ? ((occupiedRooms / totalRooms) * 100).toFixed(0)
+        : "0";
+
+    const insights = [
+      `Current occupancy rate is ${occupancyRate}%`,
+      `${occupiedRooms} of ${totalRooms} rooms are occupied`,
+      `${availableRooms} rooms are available`,
+      `${maintenanceRooms} rooms are under maintenance`,
+    ];
+
+    return res.json({
+      occupancyRate,
+      totalRooms,
+      occupiedRooms,
+      availableRooms,
+      maintenanceRooms,
+      insights,
+    });
+
+  } catch (error) {
+    console.error("Report insights error:", error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
