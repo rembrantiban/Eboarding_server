@@ -1727,7 +1727,7 @@ export const getStaffDashboardStats = async (
         ) AS previous_month
 
       FROM billing_payments
-    `)
+    `),
     ]);
 
     const boardersCurrent = Number(
