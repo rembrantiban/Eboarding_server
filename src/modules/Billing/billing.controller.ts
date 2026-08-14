@@ -167,9 +167,28 @@ export const recordPayment = async (
         // Generate Next Billing
         //----------------------------------------------------
 
+        //----------------------------------------------------
+        // Generate Next Billing
+        //----------------------------------------------------
+
         if (status === "Paid") {
 
-            if (billing.assignment_status === "Active") {
+            const assignmentCheck = await client.query(
+                `
+            SELECT
+                id,
+                status,
+                expected_checkout
+            FROM room_assignments
+            WHERE id = $1
+        `,
+                [billing.assignment_id]
+            );
+
+            if (assignmentCheck.rows.length > 0) {
+
+                const assignment =
+                    assignmentCheck.rows[0];
 
                 const currentBillingMonth =
                     billing.billing_month
@@ -183,27 +202,103 @@ export const recordPayment = async (
                     nextMonth.getMonth() + 1
                 );
 
-                console.log("Creating next month's billing...");
-                console.log({
-                    assignmentStatus: billing.assignment_status,
-                    userId: billing.user_id,
-                    assignmentId: billing.assignment_id,
-                    roomId: billing.room_id,
-                    billingMonth: nextMonth,
-                });
+                /**
+                 * Stop generating future billings
+                 * if boarder is already checked out
+                 * or expected checkout falls before
+                 * the next billing month.
+                 */
+                const checkoutDate =
+                    assignment.expected_checkout
+                        ? new Date(
+                            assignment.expected_checkout
+                        )
+                        : null;
 
-                await createMonthlyBilling(client, {
-                    userId: billing.user_id,
-                    assignmentId: billing.assignment_id,
-                    roomId: billing.room_id,
-                     bedId: billing.bed_id,
-                    billingMonth: nextMonth,
-                });
+                const shouldGenerateBilling =
+                    assignment.status === "Active" &&
+                    (
+                        !checkoutDate ||
+                        nextMonth < checkoutDate
+                    );
+
+                if (shouldGenerateBilling) {
+
+                    /**
+                     * Prevent duplicate billing
+                     */
+                    const existingBilling =
+                        await client.query(
+                            `
+                    SELECT id
+                    FROM billings
+                    WHERE assignment_id = $1
+                    AND billing_month = $2
+                    LIMIT 1
+                    `,
+                            [
+                                billing.assignment_id,
+                                nextMonth,
+                            ]
+                        );
+
+                    if (
+                        existingBilling.rowCount === 0
+                    ) {
+
+                        console.log(
+                            "Creating next month's billing..."
+                        );
+
+                        console.log({
+                            assignmentStatus:
+                                assignment.status,
+                            userId:
+                                billing.user_id,
+                            assignmentId:
+                                billing.assignment_id,
+                            roomId:
+                                billing.room_id,
+                            billingMonth:
+                                nextMonth,
+                        });
+
+                        await createMonthlyBilling(
+                            client,
+                            {
+                                userId:
+                                    billing.user_id,
+                                assignmentId:
+                                    billing.assignment_id,
+                                roomId:
+                                    billing.room_id,
+                                bedId:
+                                    billing.bed_id,
+                                billingMonth:
+                                    nextMonth,
+                            }
+                        );
+
+                    } else {
+
+                        console.log(
+                            "Next billing already exists. Skipping generation."
+                        );
+
+                    }
+
+                } else {
+
+                    console.log(
+                        "Skipping next billing because boarder is checking out or assignment is inactive."
+                    );
+
+                }
 
             } else {
 
                 console.log(
-                    `Skipping next billing because assignment status is '${billing.assignment_status}'.`
+                    "Skipping next billing because assignment no longer exists."
                 );
 
             }
@@ -244,6 +339,7 @@ export const recordPayment = async (
     }
 
 };
+
 export const getAllBillings = async (
     req: Request,
     res: Response
@@ -832,20 +928,20 @@ export const getActivePenalties = async (
 
 
 export const getMyPendingBilling = async (
-  req: AuthRequest,
-  res: Response
+    req: AuthRequest,
+    res: Response
 ) => {
-  try {
-    const userId = req.user?.id;
+    try {
+        const userId = req.user?.id;
 
-    if (!userId) {
-      return res.status(401).json({
-        message: "Unauthorized.",
-      });
-    }
+        if (!userId) {
+            return res.status(401).json({
+                message: "Unauthorized.",
+            });
+        }
 
-    const result = await pool.query(
-      `
+        const result = await pool.query(
+            `
             SELECT
             b.id,
             b.billing_no,
@@ -914,45 +1010,45 @@ export const getMyPendingBilling = async (
 
         ORDER BY b.due_date ASC;
       `,
-      [userId]
-    );
+            [userId]
+        );
 
-    if (result.rowCount === 0) {
-      return res.status(200).json({
-        billing:  [],
-        message: "No pending billing found.",
-      });
+        if (result.rowCount === 0) {
+            return res.status(200).json({
+                billing: [],
+                message: "No pending billing found.",
+            });
+        }
+
+        return res.status(200).json({
+            billing: result.rows,
+        });
+
+    } catch (error) {
+        console.error("Get My Pending Billing:", error);
+
+        return res.status(500).json({
+            message: "Server error.",
+        });
     }
-
-    return res.status(200).json({
-      billing: result.rows,
-    });
-
-  } catch (error) {
-    console.error("Get My Pending Billing:", error);
-
-    return res.status(500).json({
-      message: "Server error.",
-    });
-  }
 };
 
 
 export const getMyPaymentHistory = async (
-  req: AuthRequest,
-  res: Response
+    req: AuthRequest,
+    res: Response
 ) => {
-  try {
-    const userId = req.user?.id;
+    try {
+        const userId = req.user?.id;
 
-    if (!userId) {
-      return res.status(401).json({
-        message: "Unauthorized.",
-      });
-    }
+        if (!userId) {
+            return res.status(401).json({
+                message: "Unauthorized.",
+            });
+        }
 
-    const result = await pool.query(
-      `
+        const result = await pool.query(
+            `
         SELECT
 
             bp.id,
@@ -1034,32 +1130,32 @@ export const getMyPaymentHistory = async (
         ORDER BY
             bp.received_at DESC,
             bp.id DESC;`,
-      [userId]
-    );
+            [userId]
+        );
 
-    return res.status(200).json({
-      payments: result.rows,
-      total: result.rowCount,
-    });
+        return res.status(200).json({
+            payments: result.rows,
+            total: result.rowCount,
+        });
 
-  } catch (error) {
+    } catch (error) {
 
-    console.error("Get My Payment History Error:", error);
+        console.error("Get My Payment History Error:", error);
 
-    return res.status(500).json({
-      message: "Server error.",
-    });
+        return res.status(500).json({
+            message: "Server error.",
+        });
 
-  }
+    }
 };
 
 
 export const getPaymentsOverview = async (
-  req: AuthRequest,
-  res: Response
+    req: AuthRequest,
+    res: Response
 ) => {
-  try {
-    const result = await pool.query(`
+    try {
+        const result = await pool.query(`
       SELECT
           DATE(bp.received_at) AS payment_date,
           TO_CHAR(bp.received_at, 'Mon DD') AS date,
@@ -1079,26 +1175,26 @@ export const getPaymentsOverview = async (
           DATE(bp.received_at)
     `);
 
-    return res.status(200).json(result.rows);
+        return res.status(200).json(result.rows);
 
-  } catch (error) {
+    } catch (error) {
 
-    console.error("Payments Overview:", error);
+        console.error("Payments Overview:", error);
 
-    return res.status(500).json({
-      message: "Server error.",
-    });
+        return res.status(500).json({
+            message: "Server error.",
+        });
 
-  }
+    }
 };
 
 
 export const getCalendarEvents = async (
-  req: Request,
-  res: Response
+    req: Request,
+    res: Response
 ) => {
-  try {
-    const result = await pool.query(`
+    try {
+        const result = await pool.query(`
       SELECT
           b.id,
           b.due_date,
@@ -1140,53 +1236,53 @@ export const getCalendarEvents = async (
       ORDER BY b.due_date;
     `);
 
-    const events = result.rows.map((row) => ({
-      id: row.id,
+        const events = result.rows.map((row) => ({
+            id: row.id,
 
-      date: row.due_date,
+            date: row.due_date,
 
-      label: "Rent Payment",
+            label: "Rent Payment",
 
-      type: "payment",
+            type: "payment",
 
-      amount: Number(row.total_amount),
+            amount: Number(row.total_amount),
 
-      boarder: row.boarder,
+            boarder: row.boarder,
 
-      room: `${row.room_number} - ${row.bed_number}`,
+            room: `${row.room_number} - ${row.bed_number}`,
 
-      status: row.status,
+            status: row.status,
 
-      color:
-        row.status === "Paid"
-          ? "#10b981"
-          : row.status === "Pending"
-          ? "#a855f7"
-          : row.status === "Upcoming"
-          ? "#6366f1"
-          : "#ef4444",
-    }));
+            color:
+                row.status === "Paid"
+                    ? "#10b981"
+                    : row.status === "Pending"
+                        ? "#a855f7"
+                        : row.status === "Upcoming"
+                            ? "#6366f1"
+                            : "#ef4444",
+        }));
 
-    res.json(events);
+        res.json(events);
 
-  } catch (error) {
+    } catch (error) {
 
-    console.error(error);
+        console.error(error);
 
-    res.status(500).json({
-      message: "Server error",
-    });
+        res.status(500).json({
+            message: "Server error",
+        });
 
-  }
+    }
 };
 
 
 export const getAllActivePenalties = async (
-  req: Request,
-  res: Response
+    req: Request,
+    res: Response
 ) => {
-  try {
-    const result = await pool.query(`
+    try {
+        const result = await pool.query(`
       SELECT
         b.id,
         CONCAT(u.first_name, ' ', u.last_name) AS boarder,
@@ -1231,13 +1327,13 @@ export const getAllActivePenalties = async (
       ORDER BY b.updated_at DESC;
     `);
 
-    return res.status(200).json(result.rows);
+        return res.status(200).json(result.rows);
 
-  } catch (error) {
-    console.error(error);
+    } catch (error) {
+        console.error(error);
 
-    return res.status(500).json({
-      message: "Server error.",
-    });
-  }
+        return res.status(500).json({
+            message: "Server error.",
+        });
+    }
 };
