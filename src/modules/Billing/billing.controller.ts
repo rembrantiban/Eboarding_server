@@ -1419,7 +1419,7 @@ export const cancelBilling = async (
             [id]
         );
 
-        await client.query(
+       await client.query(
             `
             INSERT INTO billing_payments
             (
@@ -1434,22 +1434,22 @@ export const cancelBilling = async (
             VALUES
             (
                 $1,
-                0,
-                'Cancelled',
                 $2,
+                'Cancelled',
                 $3,
                 $4,
+                $5,
                 NOW()
             )
             `,
             [
                 id,
+                billing.total_amount, // ← not 0
                 reason,
                 notes ?? null,
                 cancelledBy
             ]
         );
-
         await client.query("COMMIT");
 
         return res.status(200).json({
