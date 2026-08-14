@@ -1481,11 +1481,11 @@ export const getBillingStats = async (
     res: Response
 ) => {
     try {
-
         const result = await pool.query(`
             WITH current_month AS (
                 SELECT
 
+                    -- Total income already stored in billing_payments
                     (
                         SELECT COALESCE(
                             SUM(amount),
@@ -1495,17 +1495,13 @@ export const getBillingStats = async (
                         WHERE status IN ('Paid', 'Partial')
                     ) AS total_income,
 
+                    -- Payments received this month only
                     COALESCE(
-                        SUM(
-                            CASE
-                                WHEN bp.status IN ('Paid', 'Partial')
-                                THEN bp.amount
-                                ELSE 0
-                            END
-                        ),
+                        SUM(bp.amount),
                         0
                     ) AS collected_this_month,
 
+                    -- Late fees collected this month
                     (
                         SELECT COALESCE(
                             SUM(late_fee),
@@ -1524,7 +1520,8 @@ export const getBillingStats = async (
 
                 FROM billing_payments bp
 
-                WHERE DATE_TRUNC(
+                WHERE bp.status IN ('Paid', 'Partial')
+                AND DATE_TRUNC(
                     'month',
                     bp.received_at
                 ) = DATE_TRUNC(
@@ -1537,13 +1534,7 @@ export const getBillingStats = async (
                 SELECT
 
                     COALESCE(
-                        SUM(
-                            CASE
-                                WHEN bp.status IN ('Paid', 'Partial')
-                                THEN bp.amount
-                                ELSE 0
-                            END
-                        ),
+                        SUM(bp.amount),
                         0
                     ) AS collected_this_month,
 
@@ -1565,7 +1556,8 @@ export const getBillingStats = async (
 
                 FROM billing_payments bp
 
-                WHERE DATE_TRUNC(
+                WHERE bp.status IN ('Paid', 'Partial')
+                AND DATE_TRUNC(
                     'month',
                     bp.received_at
                 ) = DATE_TRUNC(
@@ -1664,7 +1656,8 @@ export const getBillingStats = async (
         };
 
         return res.status(200).json({
-            totalIncome: Number(stats.total_income),
+            totalIncome:
+                Number(stats.total_income),
 
             lateFeesCollected:
                 Number(stats.late_fees_collected),
@@ -1753,7 +1746,7 @@ export const getIncomeMix = async (
 
         return res.status(200).json([
             {
-                name: "Room Income",
+                name: "Total Income",
                 value: roomIncome,
                 color: "#0f172a",
             },
@@ -1784,61 +1777,52 @@ export const getRevenueTrend = async (
     try {
 
         const result = await pool.query(`
-            SELECT
-                TO_CHAR(
+            WITH months AS (
+                SELECT
                     DATE_TRUNC(
                         'month',
-                        bp.received_at
-                    ),
+                        CURRENT_DATE - (INTERVAL '1 month' * gs)
+                    ) AS month_start
+                FROM generate_series(5, 0, -1) gs
+            )
+
+            SELECT
+                TO_CHAR(
+                    m.month_start,
                     'Mon'
                 ) AS month,
 
                 COALESCE(
-                    SUM(
-                        CASE
-                            WHEN bp.status = 'Paid'
-                            THEN bp.amount
-                            ELSE 0
-                        END
+                    (
+                        SELECT SUM(bp.amount)
+                        FROM billing_payments bp
+                        WHERE bp.status IN ('Paid', 'Partial')
+                        AND DATE_TRUNC(
+                            'month',
+                            bp.received_at
+                        ) = m.month_start
                     ),
                     0
                 ) AS income,
 
                 COALESCE(
-                    SUM(
-                        CASE
-                            WHEN bp.status = 'Paid'
-                            THEN b.late_fee
-                            ELSE 0
-                        END
+                    (
+                        SELECT SUM(b.late_fee)
+                        FROM billings b
+                        WHERE b.status = 'Paid'
+                        AND DATE_TRUNC(
+                            'month',
+                            b.updated_at
+                        ) = m.month_start
                     ),
                     0
                 ) AS late_fees,
 
-                DATE_TRUNC(
-                    'month',
-                    bp.received_at
-                ) AS month_sort
+                m.month_start AS month_sort
 
-            FROM billing_payments bp
+            FROM months m
 
-            LEFT JOIN billings b
-                ON b.id = bp.billing_id
-
-            WHERE bp.received_at >=
-                DATE_TRUNC(
-                    'month',
-                    CURRENT_DATE - INTERVAL '5 months'
-                )
-
-            GROUP BY
-                DATE_TRUNC(
-                    'month',
-                    bp.received_at
-                )
-
-            ORDER BY
-                month_sort ASC
+            ORDER BY month_sort ASC
         `);
 
         return res.status(200).json(
