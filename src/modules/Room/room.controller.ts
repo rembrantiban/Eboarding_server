@@ -1146,3 +1146,68 @@ export const getBedOccupancyChart = async (
     });
   }
 };
+
+export const getRoomOccupancyChart = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (
+          WHERE r.status = 'Available'
+          AND EXISTS (
+            SELECT 1
+            FROM beds b
+            WHERE b.room_id = r.id
+              AND b.status = 'Available'
+          )
+        ) AS available,
+
+        COUNT(*) FILTER (
+          WHERE r.status = 'Available'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM beds b
+            WHERE b.room_id = r.id
+              AND b.status = 'Available'
+          )
+        ) AS occupied,
+
+        COUNT(*) FILTER (
+          WHERE r.status = 'Under Maintenance'
+        ) AS maintenance
+
+      FROM rooms r
+    `);
+
+    const row = result.rows[0];
+
+    const data = [
+      {
+        name: "Available",
+        value: Number(row.available),
+        color: "#10b981",
+      },
+      {
+        name: "Occupied",
+        value: Number(row.occupied),
+        color: "#0f172a",
+      },
+      {
+        name: "Maintenance",
+        value: Number(row.maintenance),
+        color: "#f59e0b",
+      },
+    ];
+
+    return res.status(200).json(data);
+
+  } catch (error) {
+    console.error("Room Occupancy:", error);
+
+    return res.status(500).json({
+      message: "Server error.",
+    });
+  }
+};

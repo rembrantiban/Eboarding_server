@@ -13,6 +13,7 @@ import {
   updateRoomStatus,
   getRoomAvailabilityChart,
   getBedOccupancyChart,
+  getRoomOccupancyChart,
 } from "./room.controller";
 import { upload } from "../../lib/upload";
 import { checkAuth } from "../../middleware/checkAuth";
@@ -31,6 +32,7 @@ router.get("/available-rooms", checkAuth, getAvailableRooms);
 router.put( "/status/:id", checkAuth, updateRoomStatus);
 router.get("/availability-chart", checkAuth, getRoomAvailabilityChart);
 router.get("/bed-occupancy-chart", checkAuth, getBedOccupancyChart);
+router.get("/room-occupancy-chart", checkAuth, getRoomOccupancyChart);
 
 
 export default router;
