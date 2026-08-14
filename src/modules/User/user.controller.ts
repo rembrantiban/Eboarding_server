@@ -1699,35 +1699,35 @@ export const getStaffDashboardStats = async (
       `),
 
       // Revenue
+      // Revenue (same logic as Admin Dashboard)
       pool.query(`
-        SELECT
-          COALESCE(
-            SUM(
-              CASE
-                WHEN DATE_TRUNC('month', due_date)
-                  = DATE_TRUNC('month', CURRENT_DATE)
-                THEN paid_amount
-                ELSE 0
-              END
-            ),
-            0
-          ) AS current_month,
+      SELECT
+        COALESCE(
+          SUM(
+            CASE
+              WHEN DATE_TRUNC('month', received_at)
+                = DATE_TRUNC('month', CURRENT_DATE)
+              THEN amount
+              ELSE 0
+            END
+          ),
+          0
+        ) AS current_month,
 
-          COALESCE(
-            SUM(
-              CASE
-                WHEN DATE_TRUNC('month', due_date)
-                  = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
-                THEN paid_amount
-                ELSE 0
-              END
-            ),
-            0
-          ) AS previous_month
+        COALESCE(
+          SUM(
+            CASE
+              WHEN DATE_TRUNC('month', received_at)
+                = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+              THEN amount
+              ELSE 0
+            END
+          ),
+          0
+        ) AS previous_month
 
-        FROM billings
-        WHERE status = 'Paid'
-      `),
+      FROM billing_payments
+    `)
     ]);
 
     const boardersCurrent = Number(
