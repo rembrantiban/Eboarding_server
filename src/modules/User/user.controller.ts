@@ -1643,101 +1643,145 @@ export const getAvailableStaff = async (
 };
 
 
-export const getStaffDashboardStats = async (req: AuthRequest, res: Response) => {
+export const getStaffDashboardStats = async (
+  req: AuthRequest,
+  res: Response
+) => {
   try {
-    // Current Boarders
-    const currentBoarders = await pool.query(`
-      SELECT COUNT(*)::int AS count
-      FROM users
-      WHERE user_type = 'Boarder'
-      AND account_status = 'Active'
-    `);
+    const [
+      currentBoarders,
+      previousBoarders,
+      totalRooms,
+      activePenalties,
+      previousPenalties,
+      revenue,
+    ] = await Promise.all([
+      // Current active boarders
+      pool.query(`
+        SELECT COUNT(*)::int AS count
+        FROM users
+        WHERE user_type = 'Boarder'
+        AND account_status = 'Active'
+      `),
 
-    // Previous Month Boarders
-    const previousBoarders = await pool.query(`
-      SELECT COUNT(*)::int AS count
-      FROM users
-      WHERE user_type = 'Boarder'
-      AND account_status = 'Active'
-      AND created_at < DATE_TRUNC('month', CURRENT_DATE)
-    `);
+      // Boarders registered last month
+      pool.query(`
+        SELECT COUNT(*)::int AS count
+        FROM users
+        WHERE user_type = 'Boarder'
+        AND account_status = 'Active'
+        AND DATE_TRUNC('month', created_at)
+          = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+      `),
 
-    // Rooms
-    const totalRooms = await pool.query(`
-      SELECT COUNT(*)::int AS count
-      FROM rooms
-    `);
+      // Total rooms
+      pool.query(`
+        SELECT COUNT(*)::int AS count
+        FROM rooms
+      `),
 
-    // Current Penalties
-    const activePenalties = await pool.query(`
-      SELECT COUNT(*)::int AS count
-      FROM billings
-      WHERE late_fee > 0
-      AND status IN ('Pending', 'Partial', 'Overdue')
-    `);
+      // Current active penalties
+      pool.query(`
+        SELECT COUNT(*)::int AS count
+        FROM billings
+        WHERE late_fee > 0
+        AND status IN ('Pending', 'Partial', 'Overdue')
+      `),
 
-    // Previous Month Penalties
-    const previousPenalties = await pool.query(`
-      SELECT COUNT(*)::int AS count
-      FROM billings
-      WHERE late_fee > 0
-      AND status IN ('Pending', 'Partial', 'Overdue')
-      AND created_at < DATE_TRUNC('month', CURRENT_DATE)
-    `);
+      // Previous month penalties
+      pool.query(`
+        SELECT COUNT(*)::int AS count
+        FROM billings
+        WHERE late_fee > 0
+        AND status IN ('Pending', 'Partial', 'Overdue')
+        AND DATE_TRUNC('month', created_at)
+          = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+      `),
 
-    // Revenue
-    const revenue = await pool.query(`
-      SELECT
-        COALESCE(SUM(
-          CASE
-            WHEN DATE_TRUNC('month', created_at) =
-                 DATE_TRUNC('month', CURRENT_DATE)
-            THEN paid_amount
-            ELSE 0
-          END
-        ),0) AS current_month,
+      // Revenue
+      pool.query(`
+        SELECT
+          COALESCE(
+            SUM(
+              CASE
+                WHEN DATE_TRUNC('month', due_date)
+                  = DATE_TRUNC('month', CURRENT_DATE)
+                THEN paid_amount
+                ELSE 0
+              END
+            ),
+            0
+          ) AS current_month,
 
-        COALESCE(SUM(
-          CASE
-            WHEN DATE_TRUNC('month', created_at) =
-                 DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
-            THEN paid_amount
-            ELSE 0
-          END
-        ),0) AS previous_month
-      FROM billings
-      WHERE status = 'Paid'
-    `);
+          COALESCE(
+            SUM(
+              CASE
+                WHEN DATE_TRUNC('month', due_date)
+                  = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+                THEN paid_amount
+                ELSE 0
+              END
+            ),
+            0
+          ) AS previous_month
 
-    const boardersCurrent = Number(currentBoarders.rows[0].count);
-    const boardersPrevious = Number(previousBoarders.rows[0].count);
+        FROM billings
+        WHERE status = 'Paid'
+      `),
+    ]);
 
-    const penaltiesCurrent = Number(activePenalties.rows[0].count);
-    const penaltiesPrevious = Number(previousPenalties.rows[0].count);
+    const boardersCurrent = Number(
+      currentBoarders.rows[0].count
+    );
 
-    const revenueCurrent = Number(revenue.rows[0].current_month);
-    const revenuePrevious = Number(revenue.rows[0].previous_month);
+    const boardersPrevious = Number(
+      previousBoarders.rows[0].count
+    );
+
+    const penaltiesCurrent = Number(
+      activePenalties.rows[0].count
+    );
+
+    const penaltiesPrevious = Number(
+      previousPenalties.rows[0].count
+    );
+
+    const revenueCurrent = Number(
+      revenue.rows[0].current_month
+    );
+
+    const revenuePrevious = Number(
+      revenue.rows[0].previous_month
+    );
 
     const calculateDelta = (
       current: number,
       previous: number
     ): number => {
-      if (previous === 0) return 0;
+      if (previous === 0) {
+        return current > 0 ? 100 : 0;
+      }
 
       return Number(
-        (((current - previous) / previous) * 100).toFixed(1)
+        (
+          ((current - previous) / previous) *
+          100
+        ).toFixed(1)
       );
     };
 
-    res.json({
+    return res.status(200).json({
       totalBoarders: {
         value: boardersCurrent,
-        delta: calculateDelta(boardersCurrent, boardersPrevious),
+        delta: calculateDelta(
+          boardersCurrent,
+          boardersPrevious
+        ),
       },
 
       totalRooms: {
         value: Number(totalRooms.rows[0].count),
-        delta: 0, // rooms rarely change monthly
+        delta: 0,
       },
 
       activePenalties: {
@@ -1756,9 +1800,11 @@ export const getStaffDashboardStats = async (req: AuthRequest, res: Response) =>
         ),
       },
     });
+
   } catch (error) {
     console.error(error);
-    res.status(500).json({
+
+    return res.status(500).json({
       message: "Failed to load dashboard stats",
     });
   }
