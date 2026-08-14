@@ -1668,7 +1668,6 @@ export const getBillingStats = async (
     }
 };
 
-
 export const getIncomeMix = async (
     req: Request,
     res: Response
@@ -1676,7 +1675,7 @@ export const getIncomeMix = async (
     try {
         const result = await pool.query(`
             SELECT
-                COALESCE(SUM(room_fee), 0) AS room_fees,
+                COALESCE(SUM(room_fee + late_fee), 0) AS total_income,
                 COALESCE(SUM(late_fee), 0) AS late_fees
             FROM billings
             WHERE status = 'Paid'
@@ -1684,20 +1683,15 @@ export const getIncomeMix = async (
 
         const row = result.rows[0];
 
-        const roomFees = Number(row.room_fees);
-        const lateFees = Number(row.late_fees);
-
-        const totalIncome = roomFees + lateFees;
-
         const incomeMix = [
             {
                 name: "Total Income",
-                value: totalIncome,
+                value: Number(row.total_income),
                 color: "#0f172a",
             },
             {
                 name: "Late Fees",
-                value: lateFees,
+                value: Number(row.late_fees),
                 color: "#94a3b8",
             },
         ];
