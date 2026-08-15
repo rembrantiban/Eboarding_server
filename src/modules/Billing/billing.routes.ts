@@ -20,6 +20,7 @@ import {
     getCollectionTrend,
     getRecentTransactions,
     getBoarderBillingStatus,
+    getCollectionSummary,
 } from "./billing.controller"
 import express from "express"
 import { checkAuth } from "../../middleware/checkAuth"
@@ -48,5 +49,6 @@ router.get("/collection-dashboard-stats", checkAuth, getCollectionDashboardStats
 router.get("/collection-trend", checkAuth, getCollectionTrend);
 router.get("/recent-transactions", checkAuth, getRecentTransactions);
 router.get("/boarder-billing-status", checkAuth, getBoarderBillingStatus);
+router.get("/collection-summary", checkAuth, getCollectionSummary);
 
 export default router
