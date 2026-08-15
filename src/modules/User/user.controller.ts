@@ -1809,3 +1809,245 @@ export const getStaffDashboardStats = async (
     });
   }
 };
+
+export const getBoarderStats = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (
+          WHERE user_type = 'Boarder'
+        ) AS total_boarders,
+
+        COUNT(*) FILTER (
+          WHERE user_type = 'Boarder'
+          AND gender = 'Male'
+        ) AS male_boarders,
+
+        COUNT(*) FILTER (
+          WHERE user_type = 'Boarder'
+          AND gender = 'Female'
+        ) AS female_boarders,
+
+        COUNT(*) FILTER (
+          WHERE user_type = 'Boarder'
+          AND account_status = 'Active'
+        ) AS active_boarders
+      FROM users
+      WHERE is_deleted = FALSE
+    `);
+
+    const stats = result.rows[0];
+
+    const total = Number(stats.total_boarders);
+    const male = Number(stats.male_boarders);
+    const female = Number(stats.female_boarders);
+    const active = Number(stats.active_boarders);
+
+    return res.json({
+      totalBoarders: total,
+      maleBoarders: male,
+      femaleBoarders: female,
+      activeBoarders: active,
+
+      malePercentage:
+        total > 0
+          ? ((male / total) * 100).toFixed(1)
+          : "0",
+
+      femalePercentage:
+        total > 0
+          ? ((female / total) * 100).toFixed(1)
+          : "0",
+
+      activePercentage:
+        total > 0
+          ? ((active / total) * 100).toFixed(1)
+          : "0",
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Failed to load boarder statistics",
+    });
+  }
+};
+
+export const getBoarderStatusStats = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (
+          WHERE user_type = 'Boarder'
+          AND account_status = 'Active'
+        ) AS active_count,
+
+        COUNT(*) FILTER (
+          WHERE user_type = 'Boarder'
+          AND account_status = 'Deactivate'
+        ) AS deactivate_count,
+
+        COUNT(*) FILTER (
+          WHERE user_type = 'Boarder'
+        ) AS total_count
+
+      FROM users
+      WHERE is_deleted = FALSE
+    `);
+
+    const active = Number(result.rows[0].active_count);
+    const deactivate = Number(result.rows[0].deactivate_count);
+    const total = Number(result.rows[0].total_count);
+
+    const activePct =
+      total > 0
+        ? ((active / total) * 100).toFixed(1)
+        : "0.0";
+
+    const deactivatePct =
+      total > 0
+        ? ((deactivate / total) * 100).toFixed(1)
+        : "0.0";
+
+    return res.status(200).json([
+      {
+        name: "Active",
+        value: active,
+        pct: `${activePct}%`,
+        color: "#059669",
+      },
+      {
+        name: "Deactivate",
+        value: deactivate,
+        pct: `${deactivatePct}%`,
+        color: "#eab308",
+      },
+    ]);
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Failed to load boarder status statistics",
+    });
+  }
+};
+
+export const getBoardersOverTime = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        TO_CHAR(DATE_TRUNC('month', created_at), 'Mon') AS month,
+        COUNT(*)::int AS total
+      FROM users
+      WHERE user_type = 'Boarder'
+      GROUP BY DATE_TRUNC('month', created_at)
+      ORDER BY DATE_TRUNC('month', created_at)
+    `);
+
+    res.status(200).json(result.rows);
+
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      message: "Failed to load boarder trends",
+    });
+  }
+};
+
+export const getRecentBoarders = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        u.user_id_no,
+        CONCAT(u.first_name, ' ', u.last_name) AS name,
+        r.room_number AS room,
+        TO_CHAR(ra.assigned_date, 'Mon DD, YYYY') AS check_in,
+        u.account_status AS status,
+        CONCAT(u.country_code, ' ', u.contact_number) AS contact
+
+      FROM users u
+
+      LEFT JOIN room_assignments ra
+        ON ra.user_id = u.id
+        AND ra.status = 'Active'
+
+      LEFT JOIN rooms r
+        ON r.id = ra.room_id
+
+      WHERE u.user_type = 'Boarder'
+      AND u.is_deleted = FALSE
+
+      ORDER BY u.created_at DESC
+      LIMIT 5
+    `);
+
+    return res.status(200).json(result.rows);
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Failed to load recent boarders",
+    });
+  }
+};
+
+export const getBoardersList = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        u.user_id_no,
+        CONCAT(u.first_name, ' ', u.last_name) AS name,
+        u.gender,
+        u.age,
+        u.contact_number,
+        u.email,
+        u.account_status,
+
+        r.room_number,
+
+        ra.assigned_date AS check_in
+
+      FROM users u
+
+      LEFT JOIN room_assignments ra
+        ON ra.user_id = u.id
+        AND ra.status = 'Active'
+
+      LEFT JOIN rooms r
+        ON r.id = ra.room_id
+
+      WHERE
+        u.user_type = 'Boarder'
+        AND u.is_deleted = FALSE
+
+      ORDER BY u.created_at DESC
+    `);
+
+    return res.status(200).json(result.rows);
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Failed to load boarders"
+    });
+  }
+};
