@@ -26,6 +26,7 @@ import {
         getBoardersOverTime,
         getRecentBoarders,
         getBoardersList,
+        getBoarderSummary,
        } from './user.controller'
 import { verifyAdmin } from "../../middleware/authMiddleware"
 import { checkAuth } from "../../middleware/checkAuth"
@@ -61,5 +62,6 @@ router.get("/boarder-status-stats", checkAuth, getBoarderStatusStats);
 router.get("/boarders-over-time", checkAuth, getBoardersOverTime);
 router.get("/recent-boarders", checkAuth, getRecentBoarders);
 router.get("/boarders-list", checkAuth, getBoardersList);
+router.get("/boarder-summary", checkAuth, getBoarderSummary);
 
 export default router   

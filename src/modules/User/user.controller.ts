@@ -2082,3 +2082,133 @@ export const getBoardersList = async (
     });
   }
 };
+
+
+export const getBoarderSummary = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (
+          WHERE user_type = 'Boarder'
+          AND is_deleted = FALSE
+          AND valid_id_status = 'Approved'
+        )::int AS total_boarders,
+
+        COUNT(*) FILTER (
+          WHERE user_type = 'Boarder'
+          AND account_status = 'Active'
+          AND is_deleted = FALSE
+          AND valid_id_status = 'Approved'
+        )::int AS active_boarders,
+
+        COUNT(*) FILTER (
+          WHERE user_type = 'Boarder'
+          AND account_status = 'Deactivate'
+          AND is_deleted = FALSE
+          AND valid_id_status = 'Approved'
+        )::int AS deactivate_boarders,
+
+        COUNT(*) FILTER (
+          WHERE user_type = 'Boarder'
+          AND gender = 'Male'
+          AND is_deleted = FALSE
+          AND valid_id_status = 'Approved'
+        )::int AS male_boarders,
+
+        COUNT(*) FILTER (
+          WHERE user_type = 'Boarder'
+          AND gender = 'Female'
+          AND is_deleted = FALSE
+          AND valid_id_status = 'Approved'
+        )::int AS female_boarders,
+
+        COUNT(*) FILTER (
+          WHERE user_type = 'Boarder'
+          AND is_deleted = FALSE
+          AND valid_id_status = 'Approved'
+          AND DATE_TRUNC('month', created_at)
+              = DATE_TRUNC('month', CURRENT_DATE)
+        )::int AS new_this_month
+
+      FROM users
+    `);
+
+    const checkedOutResult = await pool.query(`
+      SELECT COUNT(*)::int AS checked_out_this_month
+      FROM room_assignments
+      WHERE status = 'Checked-Out'
+      AND DATE_TRUNC('month', actual_checkout)
+          = DATE_TRUNC('month', CURRENT_DATE)
+    `);
+
+    const current = result.rows[0];
+
+    const previousMonth = await pool.query(`
+      SELECT COUNT(*)::int AS total
+      FROM users
+      WHERE user_type = 'Boarder'
+      AND is_deleted = FALSE
+      AND valid_id_status = 'Approved'
+      AND created_at <
+          DATE_TRUNC('month', CURRENT_DATE)
+    `);
+
+    const previousTotal =
+      Number(previousMonth.rows[0].total);
+
+    const currentTotal =
+      Number(current.total_boarders);
+
+    const percentageChange =
+      previousTotal > 0
+        ? (
+            ((currentTotal - previousTotal) /
+              previousTotal) *
+            100
+          ).toFixed(1)
+        : "0";
+
+    return res.status(200).json({
+      totalBoarders: Number(
+        current.total_boarders
+      ),
+      activeBoarders: Number(
+        current.active_boarders
+      ),
+      deactivateBoarders: Number(
+        current.deactivate_boarders
+      ),
+      checkedOutBoarders: Number(
+        checkedOutResult.rows[0]
+          .checked_out_this_month
+      ),
+      maleBoarders: Number(
+        current.male_boarders
+      ),
+      femaleBoarders: Number(
+        current.female_boarders
+      ),
+      newThisMonth: Number(
+        current.new_this_month
+      ),
+      checkedOutThisMonth: Number(
+        checkedOutResult.rows[0]
+          .checked_out_this_month
+      ),
+      percentageChange: Number(
+        percentageChange
+      ),
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message:
+        "Failed to load boarder summary",
+    });
+  }
+};
