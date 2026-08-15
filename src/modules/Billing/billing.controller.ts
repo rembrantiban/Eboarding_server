@@ -2445,3 +2445,98 @@ export const getBoarderBillingStatus = async (
 
     }
 };
+
+export const getCollectionSummary = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+
+        const result = await pool.query(`
+            SELECT
+
+                COALESCE(
+                    SUM(bp.amount),
+                    0
+                ) AS total_collections,
+
+                COUNT(bp.id)
+                    AS total_transactions,
+
+                COUNT(DISTINCT b.user_id)
+                FILTER (
+                    WHERE b.status = 'Paid'
+                ) AS paid_boarders,
+
+                ROUND(
+                    (
+                        COALESCE(
+                            SUM(bp.amount),
+                            0
+                        )
+                        /
+                        NULLIF(
+                            (
+                                SELECT SUM(total_amount)
+                                FROM billings
+                                WHERE DATE_TRUNC(
+                                    'month',
+                                    due_date
+                                ) = DATE_TRUNC(
+                                    'month',
+                                    CURRENT_DATE
+                                )
+                            ),
+                            0
+                        )
+                    ) * 100,
+                    2
+                ) AS collection_rate
+
+            FROM billing_payments bp
+
+            INNER JOIN billings b
+                ON b.id = bp.billing_id
+
+            WHERE bp.status IN (
+                'Paid',
+                'Partial'
+            )
+
+            AND DATE_TRUNC(
+                'month',
+                bp.received_at
+            ) = DATE_TRUNC(
+                'month',
+                CURRENT_DATE
+            )
+        `);
+
+        const row = result.rows[0];
+
+        return res.status(200).json({
+            totalCollections:
+                Number(row.total_collections),
+
+            totalTransactions:
+                Number(row.total_transactions),
+
+            paidBoarders:
+                Number(row.paid_boarders),
+
+            collectionRate:
+                Number(row.collection_rate),
+        });
+
+    } catch (error) {
+
+        console.error(
+            "Collection Summary Error:",
+            error
+        );
+
+        return res.status(500).json({
+            message: "Server error.",
+        });
+    }
+};
