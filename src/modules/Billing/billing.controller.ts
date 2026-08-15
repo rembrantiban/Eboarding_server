@@ -2405,14 +2405,10 @@ export const getBoarderBillingStatus = async (
 
                 b.status,
 
-                CASE
-                    WHEN b.status = 'Paid'
-                    THEN TO_CHAR(
-                        b.updated_at,
-                        'Mon DD, YYYY'
-                    )
-                    ELSE '—'
-                END AS "paidDate"
+                TO_CHAR(
+                    b.updated_at,
+                    'Mon DD, YYYY'
+                ) AS "paidDate"
 
             FROM billings b
 
@@ -2425,8 +2421,10 @@ export const getBoarderBillingStatus = async (
             LEFT JOIN rooms r
                 ON r.id = ra.room_id
 
+            WHERE b.status = 'Paid'
+
             ORDER BY
-                b.due_date DESC,
+                b.updated_at DESC,
                 u.last_name ASC
         `);
 
