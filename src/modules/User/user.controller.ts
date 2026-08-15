@@ -1854,18 +1854,18 @@ export const getBoarderStats = async (
 
       malePercentage:
         total > 0
-          ? ((male / total) * 100).toFixed(1)
-          : "0",
+          ? parseFloat(((male / total) * 100).toFixed(1))
+          : 0,
 
       femalePercentage:
         total > 0
-          ? ((female / total) * 100).toFixed(1)
-          : "0",
+          ? parseFloat(((female / total) * 100).toFixed(1))
+          : 0,
 
       activePercentage:
         total > 0
-          ? ((active / total) * 100).toFixed(1)
-          : "0",
+          ? parseFloat(((active / total) * 100).toFixed(1))
+          : 0,
     });
 
   } catch (error) {
