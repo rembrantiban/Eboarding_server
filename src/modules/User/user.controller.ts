@@ -1973,35 +1973,65 @@ export const getRecentBoarders = async (
     const result = await pool.query(`
       SELECT
         u.user_id_no,
-        CONCAT(u.first_name, ' ', u.last_name) AS name,
-        r.room_number AS room,
-        TO_CHAR(ra.assigned_date, 'Mon DD, YYYY') AS check_in,
+
+        CONCAT(
+          u.first_name,
+          ' ',
+          u.last_name
+        ) AS name,
+
+        COALESCE(
+          r.room_number,
+          'Not Assigned'
+        ) AS room,
+
+        CASE
+          WHEN ra.assigned_date IS NOT NULL
+          THEN TO_CHAR(
+            ra.assigned_date,
+            'Mon DD, YYYY'
+          )
+          ELSE 'N/A'
+        END AS check_in,
+
         u.account_status AS status,
-        CONCAT(u.country_code, ' ', u.contact_number) AS contact
+
+        CONCAT(
+          COALESCE(u.country_code, ''),
+          ' ',
+          COALESCE(u.contact_number, '')
+        ) AS contact
 
       FROM users u
 
-      LEFT JOIN room_assignments ra
-        ON ra.user_id = u.id
-        AND ra.status = 'Active'
+      LEFT JOIN LATERAL (
+        SELECT *
+        FROM room_assignments
+        WHERE user_id = u.id
+        ORDER BY assigned_date DESC
+        LIMIT 1
+      ) ra ON TRUE
 
       LEFT JOIN rooms r
         ON r.id = ra.room_id
 
       WHERE u.user_type = 'Boarder'
-      AND u.is_deleted = FALSE
+        AND u.is_deleted = FALSE
 
       ORDER BY u.created_at DESC
       LIMIT 5
     `);
 
-    return res.status(200).json(result.rows);
+    return res.status(200).json(
+      result.rows
+    );
 
   } catch (error) {
     console.error(error);
 
     return res.status(500).json({
-      message: "Failed to load recent boarders",
+      message:
+        "Failed to load recent boarders",
     });
   }
 };
