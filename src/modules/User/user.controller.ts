@@ -2017,6 +2017,7 @@ export const getRecentBoarders = async (
 
       WHERE u.user_type = 'Boarder'
         AND u.is_deleted = FALSE
+        AND u.valid_id_status = 'Approved'
 
       ORDER BY u.created_at DESC
       LIMIT 5
