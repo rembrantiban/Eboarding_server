@@ -20,6 +20,7 @@ import {
   getRecentActivities,
   getRoomReport,
   getReportInsights
+  
 } from "./room.controller";
 import { upload } from "../../lib/upload";
 import { checkAuth } from "../../middleware/checkAuth";

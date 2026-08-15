@@ -16,6 +16,10 @@ import {
     getIncomeMix,
     getRevenueTrend,
     getDetailedSummary,
+    getCollectionDashboardStats,
+    getCollectionTrend,
+    getRecentTransactions,
+    getBoarderBillingStatus,
 } from "./billing.controller"
 import express from "express"
 import { checkAuth } from "../../middleware/checkAuth"
@@ -39,5 +43,9 @@ router.get("/stats", checkAuth, getBillingStats);
 router.get("/income-mix", checkAuth, getIncomeMix);
 router.get("/revenue-trend", checkAuth, getRevenueTrend);
 router.get("/detailed-summary", checkAuth, getDetailedSummary);
+router.get("/collection-dashboard-stats", checkAuth, getCollectionDashboardStats);
+router.get("/collection-trend", checkAuth, getCollectionTrend);
+router.get("/recent-transactions", checkAuth, getRecentTransactions);
+router.get("/boarder-billing-status", checkAuth, getBoarderBillingStatus);
 
 export default router

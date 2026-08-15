@@ -2068,3 +2068,380 @@ export const getDetailedSummary = async (
         });
     }
 };
+
+export const getCollectionDashboardStats = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+        const result = await pool.query(`
+            WITH current_month AS (
+                SELECT
+                    COALESCE(SUM(bp.amount),0) AS total_collections,
+                    COUNT(bp.id) AS total_transactions,
+
+                    COUNT(DISTINCT b.user_id)
+                    FILTER (
+                        WHERE b.status = 'Paid'
+                    ) AS paid_boarders
+
+                FROM billing_payments bp
+                INNER JOIN billings b
+                    ON b.id = bp.billing_id
+
+                WHERE bp.status IN ('Paid','Partial')
+                AND DATE_TRUNC('month', bp.received_at)
+                    = DATE_TRUNC('month', CURRENT_DATE)
+            ),
+
+            previous_month AS (
+                SELECT
+                    COALESCE(SUM(bp.amount),0) AS total_collections,
+                    COUNT(bp.id) AS total_transactions,
+
+                    COUNT(DISTINCT b.user_id)
+                    FILTER (
+                        WHERE b.status = 'Paid'
+                    ) AS paid_boarders
+
+                FROM billing_payments bp
+                INNER JOIN billings b
+                    ON b.id = bp.billing_id
+
+                WHERE bp.status IN ('Paid','Partial')
+                AND DATE_TRUNC('month', bp.received_at)
+                    = DATE_TRUNC(
+                        'month',
+                        CURRENT_DATE - INTERVAL '1 month'
+                    )
+            ),
+
+            collection_rate AS (
+                SELECT
+                    ROUND(
+                        (
+                            COALESCE(
+                                (
+                                    SELECT SUM(amount)
+                                    FROM billing_payments
+                                    WHERE status IN ('Paid','Partial')
+                                    AND DATE_TRUNC('month', received_at)
+                                        = DATE_TRUNC('month', CURRENT_DATE)
+                                ),
+                                0
+                            )
+                            /
+                            NULLIF(
+                                (
+                                    SELECT SUM(total_amount)
+                                    FROM billings
+                                    WHERE DATE_TRUNC('month', due_date)
+                                        = DATE_TRUNC('month', CURRENT_DATE)
+                                ),
+                                0
+                            )
+                        ) * 100,
+                        2
+                    ) AS rate
+            )
+
+            SELECT
+                cm.total_collections,
+                cm.total_transactions,
+                cm.paid_boarders,
+
+                pm.total_collections AS prev_collections,
+                pm.total_transactions AS prev_transactions,
+                pm.paid_boarders AS prev_paid_boarders,
+
+                cr.rate AS collection_rate
+
+            FROM current_month cm
+            CROSS JOIN previous_month pm
+            CROSS JOIN collection_rate cr
+        `);
+
+        const row = result.rows[0];
+
+        const calculateChange = (
+            current: number,
+            previous: number
+        ) => {
+            if (previous === 0) {
+                return current > 0 ? 100 : 0;
+            }
+
+            return Number(
+                (
+                    ((current - previous) / previous) *
+                    100
+                ).toFixed(1)
+            );
+        };
+
+        const averageCollection =
+            Number(row.total_transactions) > 0
+                ? Number(row.total_collections) /
+                  Number(row.total_transactions)
+                : 0;
+
+        return res.status(200).json({
+            totalCollections:
+                Number(row.total_collections),
+
+            totalCollectionsChange:
+                calculateChange(
+                    Number(row.total_collections),
+                    Number(row.prev_collections)
+                ),
+
+            totalTransactions:
+                Number(row.total_transactions),
+
+            totalTransactionsChange:
+                calculateChange(
+                    Number(row.total_transactions),
+                    Number(row.prev_transactions)
+                ),
+
+            paidBoarders:
+                Number(row.paid_boarders),
+
+            paidBoardersChange:
+                calculateChange(
+                    Number(row.paid_boarders),
+                    Number(row.prev_paid_boarders)
+                ),
+
+            collectionRate:
+                Number(row.collection_rate),
+
+            averageCollection:
+                Number(
+                    averageCollection.toFixed(2)
+                ),
+        });
+
+    } catch (error) {
+
+        console.error(
+            "Collection Dashboard Stats Error:",
+            error
+        );
+
+        return res.status(500).json({
+            message: "Server error.",
+        });
+    }
+};
+
+export const getCollectionTrend = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+
+        const result = await pool.query(`
+            WITH months AS (
+                SELECT
+                    DATE_TRUNC(
+                        'month',
+                        CURRENT_DATE - (INTERVAL '1 month' * gs)
+                    ) AS month_start
+                FROM generate_series(5, 0, -1) gs
+            )
+
+            SELECT
+                TO_CHAR(
+                    m.month_start,
+                    'Mon'
+                ) AS month,
+
+                COALESCE(
+                    (
+                        SELECT SUM(bp.amount)
+                        FROM billing_payments bp
+                        WHERE bp.status IN ('Paid','Partial')
+                        AND DATE_TRUNC(
+                            'month',
+                            bp.received_at
+                        ) = m.month_start
+                    ),
+                    0
+                ) AS amount,
+
+                m.month_start
+
+            FROM months m
+
+            ORDER BY m.month_start ASC
+        `);
+
+        return res.status(200).json(
+            result.rows.map(row => ({
+                month: row.month.trim(),
+                amount: Number(row.amount),
+            }))
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Collection Trend Error:",
+            error
+        );
+
+        return res.status(500).json({
+            message: "Server error.",
+        });
+    }
+};
+
+export const getRecentTransactions = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+
+        const result = await pool.query(`
+            SELECT
+
+                TO_CHAR(
+                    bp.received_at,
+                    'Mon DD, YYYY'
+                ) AS date,
+
+                b.billing_no AS billing,
+
+                CONCAT(
+                    boarder.first_name,
+                    ' ',
+                    boarder.last_name
+                ) AS boarder,
+
+                bp.amount,
+
+                CONCAT(
+                    'RCP-',
+                    TO_CHAR(
+                        bp.received_at,
+                        'YYYY'
+                    ),
+                    '-',
+                    LPAD(
+                        bp.id::TEXT,
+                        6,
+                        '0'
+                    )
+                ) AS ref,
+
+                bp.status
+
+            FROM billing_payments bp
+
+            INNER JOIN billings b
+                ON b.id = bp.billing_id
+
+            INNER JOIN users boarder
+                ON boarder.id = b.user_id
+
+            WHERE bp.status IN
+            (
+                'Paid',
+                'Partial'
+            )
+
+            ORDER BY
+                bp.received_at DESC
+
+            LIMIT 10
+        `);
+
+        return res.status(200).json(result.rows);
+
+    } catch (error) {
+
+        console.error(
+            "Recent Transactions Error:",
+            error
+        );
+
+        return res.status(500).json({
+            message: "Server error."
+        });
+
+    }
+};
+
+export const getBoarderBillingStatus = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+
+        const result = await pool.query(`
+            SELECT
+
+                CONCAT(
+                    u.first_name,
+                    ' ',
+                    u.last_name
+                ) AS name,
+
+                r.room_number AS room,
+
+                b.billing_no AS billing,
+
+                TO_CHAR(
+                    b.due_date,
+                    'Mon DD, YYYY'
+                ) AS due,
+
+                b.total_amount AS total,
+
+                b.paid_amount AS paid,
+
+                b.balance,
+
+                b.status,
+
+                CASE
+                    WHEN b.status = 'Paid'
+                    THEN TO_CHAR(
+                        b.updated_at,
+                        'Mon DD, YYYY'
+                    )
+                    ELSE '—'
+                END AS "paidDate"
+
+            FROM billings b
+
+            INNER JOIN users u
+                ON u.id = b.user_id
+
+            LEFT JOIN room_assignments ra
+                ON ra.id = b.assignment_id
+
+            LEFT JOIN rooms r
+                ON r.id = ra.room_id
+
+            ORDER BY
+                b.due_date DESC,
+                u.last_name ASC
+        `);
+
+        return res.status(200).json(result.rows);
+
+    } catch (error) {
+
+        console.error(
+            "Boarder Billing Status Error:",
+            error
+        );
+
+        return res.status(500).json({
+            message: "Server error."
+        });
+
+    }
+};
