@@ -25,7 +25,6 @@ CREATE TABLE maintenance_requests (
         CHECK (
             status IN (
                 'Pending',
-                'Assigned',
                 'In Progress',
                 'Completed',
                 'Closed'
