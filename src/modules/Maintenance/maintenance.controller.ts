@@ -874,11 +874,20 @@ export const getAllStaffAssignedMaintenance = async (
   res: Response
 ) => {
   try {
+    const staffId = req.user?.id;
+
+    if (!staffId) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
 
     const result = await pool.query(
       `
       SELECT
         mr.id,
+
+        mr.request_number,
 
         mr.category AS title,
 
@@ -896,9 +905,13 @@ export const getAllStaffAssignedMaintenance = async (
           staff.last_name
         ) AS assigned_staff,
 
+        mr.description,
+
         mr.status,
 
-        mr.created_at
+        mr.created_at,
+
+        mr.updated_at
 
       FROM maintenance_requests mr
 
@@ -911,21 +924,20 @@ export const getAllStaffAssignedMaintenance = async (
       LEFT JOIN users staff
         ON staff.id = mr.assigned_staff_id
 
-      WHERE mr.assigned_staff_id IS NOT NULL
+      WHERE mr.assigned_staff_id = $1
 
       ORDER BY mr.created_at DESC
-      `
+      `,
+      [staffId]
     );
 
     return res.json(result.rows);
 
   } catch (error) {
-
     console.error(error);
 
     return res.status(500).json({
       message: "Server error",
     });
-
   }
 };

@@ -7,6 +7,7 @@ import {
     getMyAssignedMaintenance,
     getMySubmittedRequest,
     getBoarderRequests,
+    getAllStaffAssignedMaintenance,
 } from "./maintenance.controller";
 import express from "express";
 import { upload } from "../../lib/upload";
@@ -24,6 +25,6 @@ router.put("/requests/:id", checkAuth, updateMaintenanceRequest)
 router.get("/my-assigned", checkAuth, getMyAssignedMaintenance)
 router.get("/my-submitted", checkAuth, getMySubmittedRequest)
 router.get("/boarder", checkAuth, getBoarderRequests)
-
+router.get("/all-staff-assigned", checkAuth, getAllStaffAssignedMaintenance)
 
 export default router
