@@ -8,6 +8,8 @@ import {
     getMySubmittedRequest,
     getBoarderRequests,
     getAllStaffAssignedMaintenance,
+    updateAssignedMaintenanceRequest,
+
 } from "./maintenance.controller";
 import express from "express";
 import { upload } from "../../lib/upload";
@@ -26,5 +28,6 @@ router.get("/my-assigned", checkAuth, getMyAssignedMaintenance)
 router.get("/my-submitted", checkAuth, getMySubmittedRequest)
 router.get("/boarder", checkAuth, getBoarderRequests)
 router.get("/all-staff-assigned", checkAuth, getAllStaffAssignedMaintenance)
+router.put("/staff/update/:id", checkAuth, updateAssignedMaintenanceRequest)
 
 export default router

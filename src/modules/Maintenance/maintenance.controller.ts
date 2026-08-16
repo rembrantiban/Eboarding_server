@@ -944,3 +944,161 @@ export const getAllStaffAssignedMaintenance = async (
     });
   }
 };
+
+export const updateAssignedMaintenanceRequest = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  const client = await pool.connect();
+
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
+    const { id } = req.params;
+
+    const {
+      status,
+      remarks,
+    } = req.body;
+
+    const allowedStatus = [
+      "In Progress",
+      "Completed",
+      "Closed",
+    ];
+
+    if (!allowedStatus.includes(status)) {
+      return res.status(400).json({
+        message: "Invalid status.",
+      });
+    }
+
+    await client.query("BEGIN");
+
+    /**
+     * Check maintenance request
+     */
+    const maintenanceResult = await client.query(
+      `
+      SELECT *
+      FROM maintenance_requests
+      WHERE id = $1
+      `,
+      [id]
+    );
+
+    if (maintenanceResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+
+      return res.status(404).json({
+        message: "Maintenance request not found.",
+      });
+    }
+
+    const maintenance =
+      maintenanceResult.rows[0];
+
+    /**
+     * Verify ownership
+     */
+    if (
+      maintenance.assigned_staff_id !==
+      req.user.id
+    ) {
+      await client.query("ROLLBACK");
+
+      return res.status(403).json({
+        message:
+          "You can only update maintenance requests assigned to you.",
+      });
+    }
+
+    /**
+     * Prevent closing directly
+     */
+    if (
+      status === "Closed" &&
+      maintenance.status !== "Completed"
+    ) {
+      await client.query("ROLLBACK");
+
+      return res.status(400).json({
+        message:
+          "Only completed requests can be closed.",
+      });
+    }
+
+    /**
+     * Update request
+     */
+    const result = await client.query(
+      `
+      UPDATE maintenance_requests
+      SET
+        status = $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING *
+      `,
+      [
+        status,
+        id,
+      ]
+    );
+
+    /**
+     * Save history
+     */
+    await client.query(
+      `
+      INSERT INTO maintenance_history
+      (
+        maintenance_id,
+        status,
+        remarks,
+        updated_by
+      )
+      VALUES
+      (
+        $1,
+        $2,
+        $3,
+        $4
+      )
+      `,
+      [
+        id,
+        status,
+        remarks ?? null,
+        req.user.id,
+      ]
+    );
+
+    await client.query("COMMIT");
+
+    return res.status(200).json({
+      message:
+        "Maintenance request updated successfully.",
+      maintenance: result.rows[0],
+    });
+
+  } catch (error) {
+
+    await client.query("ROLLBACK");
+
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+
+  } finally {
+
+    client.release();
+
+  }
+};
