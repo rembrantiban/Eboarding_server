@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   createAnnouncement,
   updateAnnouncement,
+  deleteAnnouncement,
   getMyAnnouncements,
   getUserAnnouncements,
   getUnreadCount,
@@ -29,5 +30,6 @@ router.put("/read/:id", markAsRead);
 
 
 router.put("/:id", updateAnnouncement);
+router.delete("/:id", deleteAnnouncement);
 
 export default router;

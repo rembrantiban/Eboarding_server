@@ -11,6 +11,7 @@ export const createAnnouncement = async (
     description,
     category = "General",
     audience = "Boarders",
+    status = "Active",
   } = req.body;
 
   const userId = req.user?.id;
@@ -30,9 +31,10 @@ export const createAnnouncement = async (
           description,
           category,
           audience,
+          status,
           created_by
         )
-        VALUES ($1, $2, $3, $4, $5)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING *
       )
 
@@ -42,8 +44,10 @@ export const createAnnouncement = async (
         i.description,
         i.category,
         i.audience,
+        i.status,
         i.created_by,
         CONCAT(u.first_name, ' ', u.last_name) AS created_by_name,
+        u.avatar_url AS created_by_avatar,
         i.created_at,
         i.updated_at
 
@@ -56,6 +60,7 @@ export const createAnnouncement = async (
         description,
         category,
         audience,
+        status,
         userId,
       ]
     );
@@ -112,7 +117,6 @@ export const createAnnouncement = async (
       message: "Announcement created successfully.",
       announcement,
     });
-
   } catch (error) {
     console.error(error);
 
@@ -137,6 +141,7 @@ export const getMyAnnouncements = async (
         a.description,
         a.category,
         a.audience,
+        a.status,
 
         a.created_by,
 
@@ -145,7 +150,7 @@ export const getMyAnnouncements = async (
           ' ',
           u.last_name
         ) AS created_by_name,
-        
+
         u.avatar_url AS created_by_avatar,
 
         a.created_at,
@@ -164,7 +169,6 @@ export const getMyAnnouncements = async (
     );
 
     return res.json(result.rows);
-
   } catch (error) {
     console.error(error);
 
@@ -278,6 +282,50 @@ export const updateAnnouncement = async (
   }
 };
 
+export const deleteAnnouncement = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  const { id } = req.params;
+  const userId = req.user?.id;
+
+  if (!userId) {
+    return res.status(401).json({
+      message: "Unauthorized",
+    });
+  }
+
+  try {
+    const deleted = await pool.query(
+      `
+      DELETE FROM announcements
+      WHERE
+        id = $1
+        AND created_by = $2
+      RETURNING id
+      `,
+      [id, userId]
+    );
+
+    if (deleted.rowCount === 0) {
+      return res.status(404).json({
+        message: "Announcement not found",
+      });
+    }
+
+    return res.json({
+      message: "Announcement deleted successfully.",
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Error deleting announcement",
+    });
+  }
+};
+
 export const getUserAnnouncements = async (
   req: AuthRequest,
   res: Response
@@ -311,6 +359,7 @@ export const getUserAnnouncements = async (
         a.description,
         a.category,
         a.audience,
+        a.status,
 
         a.created_by,
 
@@ -335,6 +384,7 @@ export const getUserAnnouncements = async (
 
       WHERE
         an.user_id = $1
+        AND a.status = 'Active'
         AND (
           a.audience = 'All'
           OR a.audience = $2
@@ -346,7 +396,6 @@ export const getUserAnnouncements = async (
     );
 
     return res.json(result.rows);
-
   } catch (error) {
     console.error(error);
 
