@@ -619,93 +619,6 @@ export const updateRoom = async (req: Request, res: Response) => {
   }
 };
 
-export const updateRoomStatus = async (
-  req: Request,
-  res: Response
-) => {
-  const { id } = req.params;
-  const { status } = req.body;
-
-  const allowedStatuses = [
-    "Available",
-    "Occupied",
-    "Under Maintenance",
-  ];
-
-  if (!status) {
-    return res.status(400).json({
-      message: "Status is required",
-    });
-  }
-
-  if (!allowedStatuses.includes(status)) {
-    return res.status(400).json({
-      message: "Invalid room status",
-    });
-  }
-
-  try {
-    const roomResult = await pool.query(
-      "SELECT * FROM rooms WHERE id = $1",
-      [id]
-    );
-
-    if (roomResult.rows.length === 0) {
-      return res.status(404).json({
-        message: "Room not found",
-      });
-    }
-
-    // Don't allow setting Available if room is full
-    if (status === "Available") {
-      const occupiedResult = await pool.query(
-        `
-          SELECT COUNT(*) AS occupied
-          FROM room_assignments
-          WHERE room_id = $1
-            AND status = 'Active'
-          `,
-        [id]
-      );
-
-      const occupied = Number(
-        occupiedResult.rows[0].occupied
-      );
-
-      const capacity = roomResult.rows[0].capacity;
-
-      if (occupied >= capacity) {
-        return res.status(400).json({
-          message:
-            "Room is fully occupied and cannot be marked as Available.",
-        });
-      }
-    }
-
-    const result = await pool.query(
-      `
-        UPDATE rooms
-        SET status = $1
-        WHERE id = $2
-        RETURNING *
-        `,
-      [status, id]
-    );
-
-    return res.json({
-      message: "Room status updated successfully.",
-      room: result.rows[0],
-    });
-
-  } catch (error) {
-    console.error("Update room status error:", error);
-
-    return res.status(500).json({
-      message: "Server error",
-    });
-  }
-};
-
 export const deleteRoom = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -1537,6 +1450,115 @@ export const getReportInsights = async (
 
   } catch (error) {
     console.error("Report insights error:", error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
+
+export const updateRoomStatus = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  const allowedStatuses = [
+    "Available",
+    "Occupied",
+    "Under Maintenance",
+  ];
+
+  try {
+    if (!status) {
+      return res.status(400).json({
+        message: "Status is required",
+      });
+    }
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        message: "Invalid room status",
+      });
+    }
+
+    const roomResult = await pool.query(
+      `
+      SELECT *
+      FROM rooms
+      WHERE id = $1
+      `,
+      [id]
+    );
+
+    if (roomResult.rowCount === 0) {
+      return res.status(404).json({
+        message: "Room not found",
+      });
+    }
+
+    const room = roomResult.rows[0];
+
+    const occupancyResult = await pool.query(
+      `
+      SELECT
+        COUNT(*) FILTER (
+          WHERE ra.status = 'Active'
+        ) AS occupied
+      FROM room_assignments ra
+      WHERE ra.room_id = $1
+      `,
+      [id]
+    );
+
+    const occupied = Number(
+      occupancyResult.rows[0].occupied
+    );
+
+    // Prevent Available when full
+    if (
+      status === "Available" &&
+      occupied >= room.capacity
+    ) {
+      return res.status(400).json({
+        message:
+          "This room is fully occupied and cannot be marked as Available.",
+      });
+    }
+
+    // Prevent Under Maintenance if occupied
+    if (
+      status === "Under Maintenance" &&
+      occupied > 0
+    ) {
+      return res.status(400).json({
+        message:
+          "Cannot place a room under maintenance while it has active occupants.",
+      });
+    }
+
+    const updatedRoom = await pool.query(
+      `
+      UPDATE rooms
+      SET
+        status = $1
+      WHERE id = $2
+      RETURNING *
+      `,
+      [status, id]
+    );
+
+    return res.status(200).json({
+      message: `Room status updated to ${status}.`,
+      room: updatedRoom.rows[0],
+    });
+
+  } catch (error) {
+    console.error(
+      "Update room status error:",
+      error
+    );
 
     return res.status(500).json({
       message: "Server error",
