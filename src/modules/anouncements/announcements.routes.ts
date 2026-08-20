@@ -8,6 +8,8 @@ import {
   getUnreadCount,
   markAsRead,
   markAllAsRead,
+  archiveAnnouncement,
+  restoreAnnouncement,
 } from "./anouncements.controller";
 import { checkAuth } from "../../middleware/checkAuth";
 
@@ -31,5 +33,7 @@ router.put("/read/:id", markAsRead);
 
 router.put("/:id", updateAnnouncement);
 router.delete("/:id", deleteAnnouncement);
+router.put("/archive/:id", archiveAnnouncement);
+router.put("/restore/:id", restoreAnnouncement);
 
 export default router;

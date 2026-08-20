@@ -541,3 +541,130 @@ export const markAllAsRead = async (
     });
   }
 };
+
+
+export const archiveAnnouncement = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  const { id } = req.params;
+  const userId = req.user?.id;
+
+  if (!userId) {
+    return res.status(401).json({
+      message: "Unauthorized",
+    });
+  }
+
+  try {
+    const existing = await pool.query(
+      `
+      SELECT *
+      FROM announcements
+      WHERE id = $1
+      `,
+      [id]
+    );
+
+    if (existing.rowCount === 0) {
+      return res.status(404).json({
+        message: "Announcement not found",
+      });
+    }
+
+    if (existing.rows[0].created_by !== userId) {
+      return res.status(403).json({
+        message: "Unauthorized",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE announcements
+      SET
+        status = 'Archived',
+        updated_at = CURRENT_TIMESTAMP
+      WHERE
+        id = $1
+        AND created_by = $2
+      RETURNING *
+      `,
+      [id, userId]
+    );
+
+    return res.json({
+      message: "Announcement archived successfully.",
+      announcement: result.rows[0],
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Error archiving announcement",
+    });
+  }
+};
+
+export const restoreAnnouncement = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  const { id } = req.params;
+  const userId = req.user?.id;
+
+  if (!userId) {
+    return res.status(401).json({
+      message: "Unauthorized",
+    });
+  }
+
+  try {
+    const existing = await pool.query(
+      `
+      SELECT *
+      FROM announcements
+      WHERE id = $1
+      `,
+      [id]
+    );
+
+    if (existing.rowCount === 0) {
+      return res.status(404).json({
+        message: "Announcement not found",
+      });
+    }
+
+    if (existing.rows[0].created_by !== userId) {
+      return res.status(403).json({
+        message: "Unauthorized",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE announcements
+      SET
+        status = 'Active',
+        updated_at = CURRENT_TIMESTAMP
+      WHERE
+        id = $1
+        AND created_by = $2
+      RETURNING *
+      `,
+      [id, userId]
+    );
+
+    return res.json({
+      message: "Announcement restored successfully.",
+      announcement: result.rows[0],
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Error restoring announcement",
+    });
+  }
+};
