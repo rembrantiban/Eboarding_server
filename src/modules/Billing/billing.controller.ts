@@ -2538,3 +2538,169 @@ export const getCollectionSummary = async (
         });
     }
 };
+
+export const getMyBoarderReportSummary = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        message: "Unauthorized.",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        COALESCE(
+          (
+            SELECT SUM(bp.amount)
+            FROM billing_payments bp
+            INNER JOIN billings b
+              ON b.id = bp.billing_id
+            WHERE b.user_id = $1
+            AND bp.status IN ('Paid', 'Partial')
+          ),
+          0
+        ) AS total_payments,
+
+        (
+          SELECT MAX(bp.received_at)
+          FROM billing_payments bp
+          INNER JOIN billings b
+            ON b.id = bp.billing_id
+          WHERE b.user_id = $1
+          AND bp.status IN ('Paid', 'Partial')
+        ) AS last_payment_date,
+
+        COALESCE(
+          (
+            SELECT SUM(b.late_fee)
+            FROM billings b
+            WHERE b.user_id = $1
+          ),
+          0
+        ) AS total_penalties,
+
+        COALESCE(
+          (
+            SELECT SUM(b.late_fee)
+            FROM billings b
+            WHERE b.user_id = $1
+            AND b.status IN (
+              'Pending',
+              'Partial',
+              'Overdue'
+            )
+          ),
+          0
+        ) AS outstanding_penalties
+      `,
+      [userId]
+    );
+
+    return res.status(200).json({
+      summary: {
+        total_payments: Number(
+          result.rows[0].total_payments
+        ),
+        last_payment_date:
+          result.rows[0].last_payment_date,
+        total_penalties: Number(
+          result.rows[0].total_penalties
+        ),
+        outstanding_penalties: Number(
+          result.rows[0].outstanding_penalties
+        ),
+      },
+    });
+  } catch (error) {
+    console.error(
+      "Get Boarder Report Summary Error:",
+      error
+    );
+
+    return res.status(500).json({
+      message: "Server error.",
+    });
+  }
+};
+
+
+export const getMyRecentPayments = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+          bp.id,
+          bp.amount,
+          bp.status,
+          bp.received_at,
+
+          b.billing_type,
+          b.billing_month,
+
+          CONCAT(
+              'RCP-',
+              TO_CHAR(bp.received_at,'YYYY'),
+              '-',
+              LPAD(bp.id::TEXT,6,'0')
+          ) AS receipt_no
+
+      FROM billing_payments bp
+
+      INNER JOIN billings b
+          ON b.id = bp.billing_id
+
+      WHERE b.user_id = $1
+
+      ORDER BY bp.received_at DESC
+
+      LIMIT 5
+      `,
+      [userId]
+    );
+
+    const payments = result.rows.map((row) => ({
+      id: row.id,
+      date: row.received_at,
+
+      description: `${row.billing_type} - ${new Date(
+        row.billing_month
+      ).toLocaleString("en-US", {
+        month: "short",
+        year: "numeric",
+      })}`,
+
+      amount: Number(row.amount),
+
+      status: row.status,
+
+      receipt_no: row.receipt_no,
+    }));
+
+    return res.status(200).json({
+      payments,
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Server error.",
+    });
+  }
+};
