@@ -494,6 +494,34 @@ export const getPenaltySettlements = async (
   try {
     const { id } = req.params;
 
+    const role = req.user?.user_type;
+    const requesterId = req.user?.id;
+
+    // Boarders may only read the settlement history of their own penalties.
+    if (role !== "Admin" && role !== "Staff") {
+      const owner = await pool.query(
+        `
+        SELECT boarder_id
+        FROM penalties
+        WHERE id = $1
+        AND is_deleted = FALSE
+        `,
+        [id]
+      );
+
+      if (owner.rows.length === 0) {
+        return res.status(404).json({
+          message: "Penalty not found.",
+        });
+      }
+
+      if (owner.rows[0].boarder_id !== requesterId) {
+        return res.status(403).json({
+          message: "You can only view your own penalty settlements.",
+        });
+      }
+    }
+
     const result = await pool.query(
       `
       SELECT
@@ -636,6 +664,86 @@ export const getMyPenalties = async (
     });
   } catch (error) {
     console.error("Get My Penalties Error:", error);
+
+    return res.status(500).json({
+      message: "Server error.",
+    });
+  }
+};
+
+
+/* ============================================================
+   5.12 / 5.13 / 5.14  BOARDER: MY PENALTY RECORDS
+   Full history for the logged-in boarder (every status), used
+   by the boarder-facing Penalties page. Unlike getMyPenalties
+   this is not limited to active (Pending / Partially Paid) rows.
+   ============================================================ */
+export const getMyPenaltyRecords = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    const boarderId = req.user?.id;
+
+    if (!boarderId) {
+      return res.status(401).json({
+        message: "Unauthorized.",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        p.id AS penalty_id,
+
+        u.id AS boarder_id,
+        u.first_name,
+        u.last_name,
+        u.email,
+
+        p.penalty_rule_id,
+        pr.penalty_name,
+        pr.description AS penalty_description,
+
+        p.amount,
+        p.amount_paid,
+        p.reason,
+        p.status,
+        p.penalty_date,
+        p.due_date,
+        p.settled_at,
+
+        assigner.first_name || ' ' || assigner.last_name
+          AS assigned_by,
+        assigner.user_type AS assigned_by_role,
+
+        p.created_at,
+        p.updated_at
+
+      FROM penalties p
+
+      INNER JOIN users u
+        ON u.id = p.boarder_id
+
+      LEFT JOIN penalty_rules pr
+        ON pr.id = p.penalty_rule_id
+
+      LEFT JOIN users assigner
+        ON assigner.id = p.assigned_by
+
+      WHERE p.is_deleted = FALSE
+        AND p.boarder_id = $1
+
+      ORDER BY p.created_at DESC
+      `,
+      [boarderId]
+    );
+
+    return res.status(200).json({
+      penalties: result.rows,
+    });
+  } catch (error) {
+    console.error("Get My Penalty Records Error:", error);
 
     return res.status(500).json({
       message: "Server error.",
