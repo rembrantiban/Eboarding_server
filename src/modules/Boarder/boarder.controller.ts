@@ -151,6 +151,46 @@ export const assignBoarder = async (req: AuthRequest, res: Response) => {
   }
 };
 
+/**
+ * Boarders that currently hold an ACTIVE room assignment.
+ * Used by the Penalty module so penalties are only issued to
+ * boarders who are actually staying.
+ */
+export const getActiveRoomBoarders = async (
+  _req: Request,
+  res: Response
+) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        u.id AS user_id,
+        u.first_name,
+        u.last_name,
+        u.email,
+
+        r.room_number,
+        bed.bed_number,
+
+        ra.assigned_date,
+        ra.status AS assignment_status
+
+      FROM room_assignments ra
+      JOIN users u ON u.id = ra.user_id
+      JOIN rooms r ON r.id = ra.room_id
+      JOIN beds bed ON bed.id = ra.bed_id
+
+      WHERE ra.status = 'Active'
+
+      ORDER BY u.first_name ASC, u.last_name ASC
+    `);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Get active room boarders error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 export const getAllBoarders = async (req: Request, res: Response) => {
   try {
     const result = await pool.query(`
