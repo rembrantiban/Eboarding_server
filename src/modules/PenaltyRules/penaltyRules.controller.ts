@@ -9,15 +9,27 @@ export const createPenaltyRule = async (
   try {
     const createdBy = req.user?.id;
 
+    if (req.user?.user_type !== "Admin") {
+      return res.status(403).json({
+        message: "Only administrators can create penalty rules.",
+      });
+    }
+
     const {
       penalty_name,
       description,
       amount,
     } = req.body;
 
-    if (!penalty_name || !amount) {
+    if (!penalty_name || amount === undefined || amount === null || amount === "") {
       return res.status(400).json({
         message: "Penalty name and amount are required.",
+      });
+    }
+
+    if (Number(amount) < 0 || Number.isNaN(Number(amount))) {
+      return res.status(400).json({
+        message: "Amount must be a valid non-negative number.",
       });
     }
 
@@ -128,6 +140,12 @@ export const updatePenaltyRule = async (
   res: Response
 ) => {
   try {
+    if (req.user?.user_type !== "Admin") {
+      return res.status(403).json({
+        message: "Only administrators can update penalty rules.",
+      });
+    }
+
     const { id } = req.params;
 
     const {

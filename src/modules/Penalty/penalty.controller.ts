@@ -2,6 +2,9 @@ import { Response } from "express";
 import { pool } from "../../config/db";
 import { AuthRequest } from "../../types/auth";
 
+/* ============================================================
+   5.2 / 5.8  ASSIGN PENALTY TO BOARDER
+   ============================================================ */
 export const createPenalty = async (
   req: AuthRequest,
   res: Response
@@ -20,26 +23,45 @@ export const createPenalty = async (
       boarder_id,
       reason,
       due_date,
+      amount: customAmount,
     } = req.body;
 
-    // Get penalty rule
-    const ruleResult = await pool.query(
-      `
-      SELECT *
-      FROM penalty_rules
-      WHERE id = $1
-      AND is_active = TRUE
-      `,
-      [penalty_rule_id]
-    );
-
-    if (ruleResult.rows.length === 0) {
-      return res.status(404).json({
-        message: "Penalty rule not found.",
+    if (!boarder_id) {
+      return res.status(400).json({
+        message: "Boarder is required.",
       });
     }
 
-    const rule = ruleResult.rows[0];
+    let amount = customAmount;
+
+    // If a rule is provided, take its amount unless a custom amount is passed.
+    if (penalty_rule_id) {
+      const ruleResult = await pool.query(
+        `
+        SELECT *
+        FROM penalty_rules
+        WHERE id = $1
+        AND is_active = TRUE
+        `,
+        [penalty_rule_id]
+      );
+
+      if (ruleResult.rows.length === 0) {
+        return res.status(404).json({
+          message: "Penalty rule not found or inactive.",
+        });
+      }
+
+      if (amount === undefined || amount === null || amount === "") {
+        amount = ruleResult.rows[0].amount;
+      }
+    }
+
+    if (amount === undefined || amount === null || amount === "" || Number(amount) < 0) {
+      return res.status(400).json({
+        message: "A valid penalty amount is required.",
+      });
+    }
 
     const result = await pool.query(
       `
@@ -55,12 +77,12 @@ export const createPenalty = async (
       RETURNING *
       `,
       [
-        penalty_rule_id,
+        penalty_rule_id || null,
         boarder_id,
         assignedBy,
-        rule.amount,
-        reason,
-        due_date,
+        amount,
+        reason || null,
+        due_date || null,
       ]
     );
 
@@ -77,11 +99,53 @@ export const createPenalty = async (
   }
 };
 
+/* ============================================================
+   5.5 / 5.6 / 5.10 / 5.11  VIEW / SEARCH PENALTY RECORDS
+   Optional query params: search, status, from, to
+   ============================================================ */
 export const getAllUsersWithPenalties = async (
   req: AuthRequest,
   res: Response
 ) => {
   try {
+    const { search, status, from, to } = req.query as {
+      search?: string;
+      status?: string;
+      from?: string;
+      to?: string;
+    };
+
+    const conditions: string[] = ["p.is_deleted = FALSE"];
+    const values: any[] = [];
+
+    if (search && search.trim() !== "") {
+      values.push(`%${search.trim()}%`);
+      const idx = values.length;
+      conditions.push(`(
+        u.first_name ILIKE $${idx}
+        OR u.last_name ILIKE $${idx}
+        OR (u.first_name || ' ' || u.last_name) ILIKE $${idx}
+        OR u.email ILIKE $${idx}
+        OR pr.penalty_name ILIKE $${idx}
+        OR p.reason ILIKE $${idx}
+      )`);
+    }
+
+    if (status && status.trim() !== "" && status !== "All Status") {
+      values.push(status.trim());
+      conditions.push(`p.status = $${values.length}`);
+    }
+
+    if (from && from.trim() !== "") {
+      values.push(from.trim());
+      conditions.push(`p.penalty_date >= $${values.length}`);
+    }
+
+    if (to && to.trim() !== "") {
+      values.push(to.trim());
+      conditions.push(`p.penalty_date <= $${values.length}`);
+    }
+
     const result = await pool.query(
       `
       SELECT
@@ -92,16 +156,21 @@ export const getAllUsersWithPenalties = async (
         u.last_name,
         u.email,
 
+        p.penalty_rule_id,
         pr.penalty_name,
+        pr.description AS penalty_description,
 
         p.amount,
+        p.amount_paid,
         p.reason,
         p.status,
         p.penalty_date,
         p.due_date,
+        p.settled_at,
 
         assigner.first_name || ' ' || assigner.last_name
           AS assigned_by,
+        assigner.user_type AS assigned_by_role,
 
         p.created_at,
         p.updated_at
@@ -117,10 +186,11 @@ export const getAllUsersWithPenalties = async (
       LEFT JOIN users assigner
         ON assigner.id = p.assigned_by
 
-      WHERE p.is_deleted = FALSE
+      WHERE ${conditions.join(" AND ")}
 
       ORDER BY p.created_at DESC
-      `
+      `,
+      values
     );
 
     return res.status(200).json({
@@ -138,6 +208,9 @@ export const getAllUsersWithPenalties = async (
   }
 };
 
+/* ============================================================
+   5.4  REMOVE PENALTY  (Administrator only)
+   ============================================================ */
 export const removePenalty = async (
   req: AuthRequest,
   res: Response
@@ -145,7 +218,7 @@ export const removePenalty = async (
   try {
     const userRole = req.user?.user_type;
 
-    if (userRole !== "Administrator") {
+    if (userRole !== "Admin") {
       return res.status(403).json({
         message: "Only administrators can remove penalties.",
       });
@@ -160,6 +233,7 @@ export const removePenalty = async (
         is_deleted = TRUE,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
+      AND is_deleted = FALSE
       RETURNING *
       `,
       [id]
@@ -184,7 +258,9 @@ export const removePenalty = async (
   }
 };
 
-
+/* ============================================================
+   5.3 / 5.9  UPDATE PENALTY  (also handles "Waive")
+   ============================================================ */
 export const updatePenalty = async (
   req: AuthRequest,
   res: Response
@@ -225,16 +301,20 @@ export const updatePenalty = async (
         reason = COALESCE($3, reason),
         due_date = COALESCE($4, due_date),
         status = COALESCE($5, status),
+        settled_at = CASE
+          WHEN $5 = 'Waived' THEN CURRENT_TIMESTAMP
+          ELSE settled_at
+        END,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $6
       RETURNING *
       `,
       [
-        penalty_rule_id,
-        amount,
-        reason,
-        due_date,
-        status,
+        penalty_rule_id ?? null,
+        amount ?? null,
+        reason ?? null,
+        due_date ?? null,
+        status ?? null,
         id,
       ]
     );
@@ -252,25 +332,59 @@ export const updatePenalty = async (
   }
 };
 
+/* ============================================================
+   5.7  RECORD PENALTY SETTLEMENT  (Administrator only)
+   Writes a settlement row and rolls up the penalty totals.
+   ============================================================ */
 export const recordPenaltySettlement = async (
   req: AuthRequest,
   res: Response
 ) => {
-  try {
-    const { id } = req.params;
-    const { amount_paid } = req.body;
+  const client = await pool.connect();
 
-    const penaltyResult = await pool.query(
+  try {
+    const userRole = req.user?.user_type;
+    const receivedBy = req.user?.id;
+
+    if (userRole !== "Admin") {
+      return res.status(403).json({
+        message:
+          "Only administrators can record penalty settlements.",
+      });
+    }
+
+    const { id } = req.params;
+    const {
+      amount_paid,
+      payment_date,
+      payment_method,
+      payment_reference,
+      remarks,
+    } = req.body;
+
+    const paid = Number(amount_paid);
+
+    if (!paid || Number.isNaN(paid) || paid <= 0) {
+      return res.status(400).json({
+        message: "A valid payment amount is required.",
+      });
+    }
+
+    await client.query("BEGIN");
+
+    const penaltyResult = await client.query(
       `
       SELECT *
       FROM penalties
       WHERE id = $1
       AND is_deleted = FALSE
+      FOR UPDATE
       `,
       [id]
     );
 
     if (penaltyResult.rows.length === 0) {
+      await client.query("ROLLBACK");
       return res.status(404).json({
         message: "Penalty not found.",
       });
@@ -278,54 +392,85 @@ export const recordPenaltySettlement = async (
 
     const penalty = penaltyResult.rows[0];
 
-    const newAmountPaid =
-      Number(penalty.amount_paid || 0) +
-      Number(amount_paid);
-
-    if (newAmountPaid > Number(penalty.amount)) {
+    if (penalty.status === "Waived") {
+      await client.query("ROLLBACK");
       return res.status(400).json({
-        message: "Payment exceeds penalty amount.",
+        message: "This penalty has been waived.",
       });
     }
 
-    let status = "Pending";
+    const totalAmount = Number(penalty.amount);
+    const alreadyPaid = Number(penalty.amount_paid || 0);
+    const newAmountPaid = Number(
+      (alreadyPaid + paid).toFixed(2)
+    );
 
-    if (newAmountPaid === Number(penalty.amount)) {
-      status = "Paid";
-    } else if (newAmountPaid > 0) {
-      status = "Partially Paid";
+    if (newAmountPaid > totalAmount + 0.001) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        message: "Payment exceeds the outstanding penalty balance.",
+      });
     }
 
-    const result = await pool.query(
+    const isFullyPaid = newAmountPaid >= totalAmount - 0.001;
+    const status = isFullyPaid ? "Paid" : "Partially Paid";
+
+    // 1. Log the settlement
+    const settlement = await client.query(
+      `
+      INSERT INTO penalty_settlements (
+        penalty_id,
+        amount_paid,
+        payment_date,
+        payment_method,
+        payment_reference,
+        remarks,
+        received_by
+      )
+      VALUES ($1,$2,COALESCE($3, CURRENT_DATE),$4,$5,$6,$7)
+      RETURNING *
+      `,
+      [
+        id,
+        paid,
+        payment_date || null,
+        payment_method || null,
+        payment_reference || null,
+        remarks || null,
+        receivedBy,
+      ]
+    );
+
+    // 2. Roll up the penalty
+    const updated = await client.query(
       `
       UPDATE penalties
       SET
         amount_paid = $1,
         status = $2,
         settled_at = CASE
-          WHEN $2 = 'Paid'
-          THEN CURRENT_TIMESTAMP
+          WHEN $2 = 'Paid' THEN CURRENT_TIMESTAMP
           ELSE settled_at
         END,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $3
       RETURNING *
       `,
-      [
-        newAmountPaid,
-        status,
-        id,
-      ]
+      [newAmountPaid, status, id]
     );
 
+    await client.query("COMMIT");
+
     return res.status(200).json({
-      message:
-        "Penalty settlement recorded successfully.",
-      penalty: result.rows[0],
-      remaining_balance:
-        Number(penalty.amount) - newAmountPaid,
+      message: "Penalty settlement recorded successfully.",
+      penalty: updated.rows[0],
+      settlement: settlement.rows[0],
+      remaining_balance: Number(
+        (totalAmount - newAmountPaid).toFixed(2)
+      ),
     });
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error(
       "Record Penalty Settlement Error:",
       error
@@ -334,14 +479,61 @@ export const recordPenaltySettlement = async (
     return res.status(500).json({
       message: "Server error.",
     });
+  } finally {
+    client.release();
   }
 };
 
+/* ============================================================
+   5.7 (support)  VIEW SETTLEMENT HISTORY FOR A PENALTY
+   ============================================================ */
+export const getPenaltySettlements = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `
+      SELECT
+        s.*,
+        u.first_name || ' ' || u.last_name AS received_by_name
+      FROM penalty_settlements s
+      LEFT JOIN users u
+        ON u.id = s.received_by
+      WHERE s.penalty_id = $1
+      ORDER BY s.created_at DESC
+      `,
+      [id]
+    );
+
+    return res.status(200).json({
+      settlements: result.rows,
+    });
+  } catch (error) {
+    console.error("Get Penalty Settlements Error:", error);
+
+    return res.status(500).json({
+      message: "Server error.",
+    });
+  }
+};
+
+/* ============================================================
+   PENALTY RULES (support)  DEACTIVATE  (Administrator only)
+   ============================================================ */
 export const deactivatePenaltyRule = async (
   req: AuthRequest,
   res: Response
 ) => {
   try {
+    if (req.user?.user_type !== "Admin") {
+      return res.status(403).json({
+        message: "Only administrators can deactivate penalty rules.",
+      });
+    }
+
     const { id } = req.params;
 
     const result = await pool.query(

@@ -34,6 +34,11 @@ CREATE TABLE penalties (
     due_date DATE,
     amount_paid DECIMAL(10,2) DEFAULT 0,
 
+    settled_at TIMESTAMP,
+
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Run this if the table already exists:
+-- ALTER TABLE penalties ADD COLUMN IF NOT EXISTS settled_at TIMESTAMP;
