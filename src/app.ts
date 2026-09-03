@@ -10,6 +10,8 @@ import documents from "./modules/Documents/documents.routes"
 import roomAssignmentRoutes from "./modules/RoomAssignment/AssignRoom.routes";
 import BillingRoutes from "./modules/Billing/billing.routes"
 import MaintenanceRoutes from "./modules/Maintenance/maintenance..routes"
+import penaltyRoutes from "./modules/Penalty/penelty.routes"
+import penaltyRulesRoutes from "./modules/PenaltyRules/penaltyRules.routes"
 
 
 import dotenv from "dotenv"
@@ -48,6 +50,8 @@ app.use("/api/rules", rules)
 app.use("/api/documents", documents)
 app.use("/api/billings", BillingRoutes)
 app.use("/api/maintenance", MaintenanceRoutes)
+app.use("/api/penalties", penaltyRoutes)
+app.use("/api/penalty-rules", penaltyRulesRoutes)
 
 app.get("/", (req, res) => {
   res.send("API is running ")

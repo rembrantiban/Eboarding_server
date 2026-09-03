@@ -2212,3 +2212,61 @@ export const getBoarderSummary = async (
     });
   }
 };
+
+export const resetUserPassword = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({
+        message:
+          "Password must be at least 6 characters long.",
+      });
+    }
+
+    const userResult = await pool.query(
+      `SELECT id, first_name, last_name, email, username
+       FROM users
+       WHERE id = $1`,
+      [id]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        message: "User not found.",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(
+      newPassword,
+      10
+    );
+
+    await pool.query(
+      `UPDATE users
+       SET
+         password = $1,
+         reset_code = NULL,
+         reset_code_expiry = NULL
+       WHERE id = $2`,
+      [hashedPassword, id]
+    );
+
+    return res.status(200).json({
+      message:
+        "Password has been reset successfully.",
+      user: userResult.rows[0],
+    });
+
+  } catch (error) {
+    console.error("Reset User Password Error:", error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};

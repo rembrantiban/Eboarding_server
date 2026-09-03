@@ -27,6 +27,7 @@ import {
         getRecentBoarders,
         getBoardersList,
         getBoarderSummary,
+        resetUserPassword,
        } from './user.controller'
 import { verifyAdmin } from "../../middleware/authMiddleware"
 import { checkAuth } from "../../middleware/checkAuth"
@@ -63,5 +64,6 @@ router.get("/boarders-over-time", checkAuth, getBoardersOverTime);
 router.get("/recent-boarders", checkAuth, getRecentBoarders);
 router.get("/boarders-list", checkAuth, getBoardersList);
 router.get("/boarder-summary", checkAuth, getBoarderSummary);
+router.put("/reset-user-password/:id", checkAuth, verifyAdmin, resetUserPassword);
 
 export default router   
