@@ -667,9 +667,14 @@ export const getAllUsers = async (
 
         FROM users u
 
-        LEFT JOIN boarders b
-          ON b.user_id = u.id
-          AND b.status = 'Active'
+        LEFT JOIN LATERAL (
+          SELECT id, room_id, bed_id
+          FROM boarders
+          WHERE user_id = u.id
+            AND status = 'Active'
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) b ON TRUE
 
         LEFT JOIN rooms r
           ON b.room_id = r.id
