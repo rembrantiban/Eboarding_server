@@ -23,6 +23,7 @@ import {
     getCollectionSummary,
     getMyBoarderReportSummary,
     getMyRecentPayments,
+    updateBillingInformation,
 } from "./billing.controller"
 import express from "express"
 import { checkAuth } from "../../middleware/checkAuth"
@@ -42,6 +43,7 @@ router.get("/payments-overview", checkAuth, getPaymentsOverview);
 router.get("/calendar-events",checkAuth, getCalendarEvents);
 router.get("/all-active-penalties", checkAuth, getAllActivePenalties);
 router.put("/cancel-billing/:id", checkAuth, cancelBilling);
+router.put("/update-info/:id", checkAuth, updateBillingInformation);
 router.get("/stats", checkAuth, getBillingStats);
 router.get("/income-mix", checkAuth, getIncomeMix);
 router.get("/revenue-trend", checkAuth, getRevenueTrend);

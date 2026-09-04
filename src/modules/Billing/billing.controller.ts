@@ -2704,3 +2704,223 @@ export const getMyRecentPayments = async (
     });
   }
 };
+
+//======================================================
+// Update Billing Information
+//======================================================
+// Lets staff / admin correct a billing when a mistake was
+// made: the schedule, the room fee, the discount and the
+// late fee. Utilities / other charges and the paid amount
+// are left untouched here.
+
+export const updateBillingInformation = async (
+    req: AuthRequest,
+    res: Response
+) => {
+
+    const client = await pool.connect();
+
+    try {
+
+        const { id } = req.params;
+
+        const {
+            billing_type,
+            billing_month,
+            due_date,
+            room_fee,
+            discount,
+            late_fee,
+        } = req.body;
+
+        //--------------------------------------------------
+        // Validate input
+        //--------------------------------------------------
+
+        if (!due_date) {
+            return res.status(400).json({
+                message: "Due date is required.",
+            });
+        }
+
+        const roomFee = Number(room_fee);
+        const discountAmount = Number(discount);
+        const lateFee = Number(late_fee);
+
+        if (
+            [roomFee, discountAmount, lateFee].some(
+                (v) => Number.isNaN(v) || v < 0
+            )
+        ) {
+            return res.status(400).json({
+                message: "Amounts must be valid non-negative values.",
+            });
+        }
+
+        await client.query("BEGIN");
+
+        //--------------------------------------------------
+        // Get Billing
+        //--------------------------------------------------
+
+        const billingResult = await client.query(
+            `
+            SELECT *
+            FROM billings
+            WHERE id = $1
+            FOR UPDATE
+            `,
+            [id]
+        );
+
+        if (billingResult.rowCount === 0) {
+
+            await client.query("ROLLBACK");
+
+            return res.status(404).json({
+                message: "Billing not found.",
+            });
+
+        }
+
+        const billing = billingResult.rows[0];
+
+        //--------------------------------------------------
+        // Cannot edit Paid / Cancelled billings
+        //--------------------------------------------------
+
+        if (
+            billing.status === "Paid" ||
+            billing.status === "Cancelled"
+        ) {
+
+            await client.query("ROLLBACK");
+
+            return res.status(400).json({
+                message:
+                    "A paid or cancelled billing can no longer be edited.",
+            });
+
+        }
+
+        //--------------------------------------------------
+        // Recompute totals
+        //--------------------------------------------------
+        // Utilities / other charges keep their stored values.
+
+        const utilitiesFee = Number(billing.utilities_fee);
+        const otherCharges = Number(billing.other_charges);
+        const paidAmount = Number(billing.paid_amount);
+
+        const newTotal =
+            roomFee +
+            utilitiesFee +
+            otherCharges -
+            discountAmount +
+            lateFee;
+
+        if (newTotal < 0) {
+
+            await client.query("ROLLBACK");
+
+            return res.status(400).json({
+                message:
+                    "Total amount cannot be negative after discount.",
+            });
+
+        }
+
+        if (newTotal < paidAmount) {
+
+            await client.query("ROLLBACK");
+
+            return res.status(400).json({
+                message:
+                    "New total cannot be lower than the amount already paid.",
+            });
+
+        }
+
+        const newBalance = newTotal - paidAmount;
+
+        //--------------------------------------------------
+        // Determine Status
+        //--------------------------------------------------
+
+        let status: string;
+
+        if (newBalance <= 0) {
+            status = "Paid";
+        }
+        else if (billing.status === "Upcoming") {
+            status = "Upcoming";
+        }
+        else if (paidAmount > 0) {
+            status = "Partial";
+        }
+        else if (new Date(due_date) < new Date(new Date().toDateString())) {
+            status = "Overdue";
+        }
+        else {
+            status = "Pending";
+        }
+
+        //--------------------------------------------------
+        // Update Billing
+        //--------------------------------------------------
+
+        const result = await client.query(
+            `
+            UPDATE billings
+            SET
+                billing_type   = COALESCE($1, billing_type),
+                billing_month  = $2,
+                due_date       = $3,
+                room_fee       = $4,
+                discount       = $5,
+                late_fee       = $6,
+                total_amount   = $7,
+                balance        = $8,
+                status         = $9,
+                updated_at     = NOW()
+            WHERE id = $10
+            RETURNING *
+            `,
+            [
+                billing_type ?? null,
+                billing_month || null,
+                due_date,
+                roomFee,
+                discountAmount,
+                lateFee,
+                newTotal,
+                newBalance,
+                status,
+                id,
+            ]
+        );
+
+        await client.query("COMMIT");
+
+        return res.status(200).json({
+            message: "Billing information updated successfully.",
+            billing: result.rows[0],
+        });
+
+    } catch (error) {
+
+        await client.query("ROLLBACK");
+
+        console.error(error);
+
+        return res.status(500).json({
+            message: "Server error.",
+        });
+
+    } finally {
+
+        client.release();
+
+    }
+
+};
