@@ -353,10 +353,8 @@ export const recordPenaltySettlement = async (
       });
     }
 
-    console.log("receivedBy:", receivedBy);
-    console.log("user:", req.user);
-
     const { id } = req.params;
+
     const {
       amount_paid,
       payment_date,
@@ -388,6 +386,7 @@ export const recordPenaltySettlement = async (
 
     if (penaltyResult.rows.length === 0) {
       await client.query("ROLLBACK");
+
       return res.status(404).json({
         message: "Penalty not found.",
       });
@@ -397,28 +396,38 @@ export const recordPenaltySettlement = async (
 
     if (penalty.status === "Waived") {
       await client.query("ROLLBACK");
+
       return res.status(400).json({
         message: "This penalty has been waived.",
       });
     }
 
     const totalAmount = Number(penalty.amount);
-    const alreadyPaid = Number(penalty.amount_paid || 0);
+    const alreadyPaid = Number(
+      penalty.amount_paid || 0
+    );
+
     const newAmountPaid = Number(
       (alreadyPaid + paid).toFixed(2)
     );
 
     if (newAmountPaid > totalAmount + 0.001) {
       await client.query("ROLLBACK");
+
       return res.status(400).json({
-        message: "Payment exceeds the outstanding penalty balance.",
+        message:
+          "Payment exceeds the outstanding penalty balance.",
       });
     }
 
-    const isFullyPaid = newAmountPaid >= totalAmount - 0.001;
-    const status = isFullyPaid ? "Paid" : "Partially Paid";
+    const isFullyPaid =
+      newAmountPaid >= totalAmount - 0.001;
 
-    // 1. Log the settlement
+    const status = isFullyPaid
+      ? "Paid"
+      : "Partially Paid";
+
+    // Create settlement record
     const settlement = await client.query(
       `
       INSERT INTO penalty_settlements (
@@ -430,7 +439,15 @@ export const recordPenaltySettlement = async (
         remarks,
         received_by
       )
-      VALUES ($1,$2,COALESCE($3, CURRENT_DATE),$4,$5,$6,$7)
+      VALUES (
+        $1,
+        $2,
+        COALESCE($3::DATE, CURRENT_DATE),
+        $4::VARCHAR(50),
+        $5::VARCHAR(100),
+        $6::TEXT,
+        $7
+      )
       RETURNING *
       `,
       [
@@ -444,28 +461,34 @@ export const recordPenaltySettlement = async (
       ]
     );
 
-    // 2. Roll up the penalty
+    // Update penalty status
     const updated = await client.query(
       `
       UPDATE penalties
       SET
         amount_paid = $1,
-        status = $2,
+        status = $2::VARCHAR(20),
         settled_at = CASE
-          WHEN $2 = 'Paid' THEN CURRENT_TIMESTAMP
+          WHEN $2::VARCHAR(20) = 'Paid'
+          THEN CURRENT_TIMESTAMP
           ELSE settled_at
         END,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $3
       RETURNING *
       `,
-      [newAmountPaid, status, id]
+      [
+        newAmountPaid,
+        status,
+        id,
+      ]
     );
 
     await client.query("COMMIT");
 
     return res.status(200).json({
-      message: "Penalty settlement recorded successfully.",
+      message:
+        "Penalty settlement recorded successfully.",
       penalty: updated.rows[0],
       settlement: settlement.rows[0],
       remaining_balance: Number(
@@ -474,6 +497,7 @@ export const recordPenaltySettlement = async (
     });
   } catch (error: any) {
     await client.query("ROLLBACK");
+
     console.error("ERROR:", error);
     console.error("MESSAGE:", error?.message);
     console.error("DETAIL:", error?.detail);
@@ -486,12 +510,10 @@ export const recordPenaltySettlement = async (
       code: error?.code,
       constraint: error?.constraint,
     });
-
   } finally {
     client.release();
   }
 };
-
 /* ============================================================
    5.7 (support)  VIEW SETTLEMENT HISTORY FOR A PENALTY
    ============================================================ */
