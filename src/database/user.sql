@@ -40,6 +40,7 @@ CREATE TABLE users (
 
 valid_id_rejection_reason TEXT,
 valid_id_verified_by INT,
+is_verified BOOLEAN NOT NULL DEFAULT FALSE,
 
 -- Emergency Contact
 

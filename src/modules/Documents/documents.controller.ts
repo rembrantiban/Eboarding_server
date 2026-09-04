@@ -21,6 +21,7 @@ export const getAllDocuments = async (
         u.valid_id_image,
         u.valid_id_status,
         u.valid_id_rejection_reason,
+        u.is_verified,
 
         verifier.id AS verified_by_id,
         verifier.first_name || ' ' || verifier.last_name AS verified_by,
@@ -120,7 +121,8 @@ export const approveUserDocument = async (
       SET
           valid_id_status = 'Approved',
           valid_id_rejection_reason = NULL,
-          valid_id_verified_by = $1
+          valid_id_verified_by = $1,
+          is_verified = TRUE
       WHERE
           id = $2
       AND user_type = 'Boarder'
@@ -130,6 +132,7 @@ export const approveUserDocument = async (
           first_name,
           last_name,
           valid_id_status,
+          is_verified,
           updated_at;
       `,
       [verifiedBy, id]
