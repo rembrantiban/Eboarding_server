@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "packageManager": "npm@11.6.0",
+  
   "scripts": {
     "start": "node dist/server.js",
     "dev": "ts-node-dev --respawn src/server.ts",
