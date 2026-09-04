@@ -158,6 +158,57 @@ export const approveUserDocument = async (
   }
 };
 
+export const verifyUserDocument = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { id } = req.params;
+
+    // Logged-in Staff/Admin
+    const verifiedBy = (req as any).user.id;
+
+    const result = await pool.query(
+      `
+      UPDATE users
+      SET
+          is_verified = TRUE,
+          valid_id_verified_by = $1
+      WHERE
+          id = $2
+      AND user_type = 'Boarder'
+      RETURNING
+          id,
+          user_id_no,
+          first_name,
+          last_name,
+          valid_id_status,
+          is_verified,
+          updated_at;
+      `,
+      [verifiedBy, id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        message: "Boarder not found."
+      });
+    }
+
+    return res.status(200).json({
+      message: "Document verified successfully.",
+      user: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Server error."
+    });
+  }
+};
+
 export const rejectUserDocument = async (
   req: Request,
   res: Response
