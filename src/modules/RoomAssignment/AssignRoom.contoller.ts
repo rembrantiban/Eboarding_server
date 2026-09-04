@@ -1069,7 +1069,7 @@ export const getMyDashboard = async (
       WHERE
           user_id = $1
       AND
-          status IN ('Pending','Partial')
+          status IN ('Upcoming','Pending','Partial','Overdue')
 
       ORDER BY due_date ASC
 
