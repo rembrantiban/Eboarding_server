@@ -600,8 +600,7 @@ export const applyDiscount = async (
 
         if (
             billing.status === "Paid" ||
-            billing.status === "Cancelled" ||
-            billing.status === "Upcoming"
+            billing.status === "Cancelled"
         ) {
 
             await client.query("ROLLBACK");
