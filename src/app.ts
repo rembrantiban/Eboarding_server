@@ -9,7 +9,7 @@ import rules from "./modules/rules/rules.routes"
 import documents from "./modules/Documents/documents.routes"
 import roomAssignmentRoutes from "./modules/RoomAssignment/AssignRoom.routes";
 import BillingRoutes from "./modules/Billing/billing.routes"
-import MaintenanceRoutes from "./modules/Maintenance/maintenance..routes"
+import MaintenanceRoutes from "./modules/Maintenance/maintenance.routes"
 import penaltyRoutes from "./modules/Penalty/penelty.routes"
 import penaltyRulesRoutes from "./modules/PenaltyRules/penaltyRules.routes"
 
