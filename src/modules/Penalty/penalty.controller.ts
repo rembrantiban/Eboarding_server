@@ -353,6 +353,9 @@ export const recordPenaltySettlement = async (
       });
     }
 
+    console.log("receivedBy:", receivedBy);
+    console.log("user:", req.user);
+
     const { id } = req.params;
     const {
       amount_paid,
@@ -433,10 +436,10 @@ export const recordPenaltySettlement = async (
       [
         id,
         paid,
-        payment_date || null,
-        payment_method || null,
-        payment_reference || null,
-        remarks || null,
+        payment_date ?? null,
+        payment_method ?? null,
+        payment_reference ?? null,
+        remarks ?? null,
         receivedBy,
       ]
     );
@@ -469,16 +472,21 @@ export const recordPenaltySettlement = async (
         (totalAmount - newAmountPaid).toFixed(2)
       ),
     });
-  } catch (error) {
+  } catch (error: any) {
     await client.query("ROLLBACK");
-    console.error(
-      "Record Penalty Settlement Error:",
-      error
-    );
+    console.error("ERROR:", error);
+    console.error("MESSAGE:", error?.message);
+    console.error("DETAIL:", error?.detail);
+    console.error("CODE:", error?.code);
+    console.error("CONSTRAINT:", error?.constraint);
 
     return res.status(500).json({
-      message: "Server error.",
+      message: error?.message,
+      detail: error?.detail,
+      code: error?.code,
+      constraint: error?.constraint,
     });
+
   } finally {
     client.release();
   }
