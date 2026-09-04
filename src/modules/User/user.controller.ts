@@ -1298,7 +1298,7 @@ export const checkAuthenticated = async (req: AuthRequest, res: Response) => {
 
 export const countTotalBoarders = async (req: Request, res: Response) => {
   try {
-    const total = await pool.query("SELECT COUNT(*) FROM users WHERE user_type='Boarder'");
+    const total = await pool.query("SELECT COUNT(*) FROM users WHERE user_type='Boarder' AND is_deleted = FALSE");
     res.json({ total: total.rows[0].count });
   }
   catch (error: any) {
