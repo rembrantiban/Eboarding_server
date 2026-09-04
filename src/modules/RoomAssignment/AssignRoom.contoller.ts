@@ -1162,7 +1162,7 @@ export const getUpcomingPayments = async (
       WHERE
           b.user_id = $1
       AND
-          b.status IN ('Pending','Partial')
+          b.status IN ('Upcoming','Pending','Partial','Overdue')
 
       ORDER BY
           b.due_date ASC
