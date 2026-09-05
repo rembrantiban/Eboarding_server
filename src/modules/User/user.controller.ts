@@ -378,7 +378,7 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
       )
       VALUES
       (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'Approved'
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'Approved'
       )
 
       RETURNING
@@ -389,6 +389,7 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
         email,
         username,
         country_code,
+        nationality,
         contact_number,
         address,
         avatar_url,
@@ -407,8 +408,8 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
         last_name,
         email,
         username,
-        nationality,
         country_code,
+        nationality,
         contact_number,
         address,
         hashedPassword,
@@ -552,7 +553,7 @@ export const createUserByStaff = async (req: Request, res: Response) => {
       )
       VALUES
       (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'Approved'
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'Approved'
       )
 
       RETURNING
@@ -590,8 +591,8 @@ export const createUserByStaff = async (req: Request, res: Response) => {
         avatarUrl,
         gender,
         age || null,
-        valid_id_type,
         validIdImage,
+        valid_id_type,
         emergency_contact_name,
         emergency_contact_number,
         emergency_contact_relationship,
