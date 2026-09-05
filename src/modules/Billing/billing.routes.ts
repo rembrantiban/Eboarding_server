@@ -9,6 +9,7 @@ import {
     getMyPendingBilling,
     getMyPaymentHistory,
     getPaymentsOverview,
+    getPaymentsOverviewTrend,
     getCalendarEvents,
     getAllActivePenalties,
     cancelBilling,
@@ -40,6 +41,7 @@ router.get("/active-penalties", checkAuth, getActivePenalties);
 router.get("/my-billing",checkAuth,getMyPendingBilling);
 router.get("/my-payment-history",checkAuth,getMyPaymentHistory);
 router.get("/payments-overview", checkAuth, getPaymentsOverview);
+router.get("/payments-overview-trend", checkAuth, getPaymentsOverviewTrend);
 router.get("/calendar-events",checkAuth, getCalendarEvents);
 router.get("/all-active-penalties", checkAuth, getAllActivePenalties);
 router.put("/cancel-billing/:id", checkAuth, cancelBilling);

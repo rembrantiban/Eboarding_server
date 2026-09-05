@@ -1212,6 +1212,69 @@ export const getPaymentsOverview = async (
     }
 };
 
+export const getPaymentsOverviewTrend = async (
+    req: AuthRequest,
+    res: Response
+) => {
+    try {
+
+        const result = await pool.query(`
+            WITH months AS (
+                SELECT
+                    DATE_TRUNC(
+                        'month',
+                        CURRENT_DATE - (INTERVAL '1 month' * gs)
+                    ) AS month_start
+                FROM generate_series(5, 0, -1) gs
+            )
+
+            SELECT
+                TO_CHAR(
+                    m.month_start,
+                    'Mon'
+                ) AS date,
+
+                COALESCE(
+                    (
+                        SELECT SUM(bp.amount)
+                        FROM billing_payments bp
+                        WHERE bp.status IN ('Paid', 'Partial')
+                        AND DATE_TRUNC(
+                            'month',
+                            bp.received_at
+                        ) = m.month_start
+                    ),
+                    0
+                ) AS value,
+
+                m.month_start AS month_sort
+
+            FROM months m
+
+            ORDER BY month_sort ASC
+        `);
+
+        return res.status(200).json(
+            result.rows.map(row => ({
+                date: row.date.trim(),
+                value: Number(row.value),
+            }))
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Payments Overview Trend Error:",
+            error
+        );
+
+        return res.status(500).json({
+            message: "Server error.",
+        });
+
+    }
+};
+
 export const getCalendarEvents = async (
     req: Request,
     res: Response
