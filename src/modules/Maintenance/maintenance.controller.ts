@@ -225,7 +225,7 @@ export const getSubmittedMaintenance = async (
         ON staff.id = mr.assigned_staff_id
 
       WHERE
-        mr.status NOT IN ('Completed', 'Closed')
+        mr.status != 'Closed'
 
       ORDER BY
         mr.created_at DESC
