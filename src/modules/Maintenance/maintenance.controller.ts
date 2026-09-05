@@ -406,7 +406,7 @@ export const assignMaintenanceRequest = async (
     if (existingAssignment.rows.length > 0) {
       return res.status(400).json({
         message:
-          "This staff member is already handling another maintenance request wait until it is completed.",
+          "This staff member is already handling another maintenance request wait until it is resolved.",
       });
     }
 
@@ -483,7 +483,7 @@ export const updateMaintenanceStatus = async (
     const allowedStatus = [
       "Assigned",
       "In Progress",
-      "Completed",
+      "Resolved",
       "Closed",
     ];
 
@@ -515,18 +515,18 @@ export const updateMaintenanceStatus = async (
     }
 
     /**
-     * Prevent closing unless completed
+     * Prevent closing unless resolved
      */
 
     if (
       status === "Closed" &&
-      maintenance.rows[0].status !== "Completed"
+      maintenance.rows[0].status !== "Resolved"
     ) {
 
       await client.query("ROLLBACK");
 
       return res.status(400).json({
-        message: "Only completed requests can be closed.",
+        message: "Only resolved requests can be closed.",
       });
 
     }
@@ -805,7 +805,7 @@ export const getMyAssignedMaintenance = async (
 
         mr.status NOT IN
         (
-          'Completed',
+          'Resolved',
           'Closed'
         )
 
@@ -1060,7 +1060,7 @@ export const updateAssignedMaintenanceRequest = async (
 
     const allowedStatus = [
       "In Progress",
-      "Completed",
+      "Resolved",
       "Closed",
     ];
 
@@ -1115,13 +1115,13 @@ export const updateAssignedMaintenanceRequest = async (
      */
     if (
       status === "Closed" &&
-      maintenance.status !== "Completed"
+      maintenance.status !== "Resolved"
     ) {
       await client.query("ROLLBACK");
 
       return res.status(400).json({
         message:
-          "Only completed requests can be closed.",
+          "Only resolved requests can be closed.",
       });
     }
 

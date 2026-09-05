@@ -26,7 +26,7 @@ CREATE TABLE maintenance_requests (
             status IN (
                 'Pending',
                 'In Progress',
-                'Completed',
+                'Resolved',
                 'Closed'
             )
         ),

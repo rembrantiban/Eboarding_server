@@ -1608,7 +1608,7 @@ export const getAvailableStaff = async (
         ) AS active_requests,
 
         COUNT(mr.id) FILTER (
-          WHERE mr.status = 'Completed'
+          WHERE mr.status = 'Resolved'
         ) AS completed_requests,
 
         COUNT(mr.id) FILTER (
