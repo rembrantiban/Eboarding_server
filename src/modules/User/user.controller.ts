@@ -1689,17 +1689,15 @@ export const getStaffDashboardStats = async (
       // Current active penalties
       pool.query(`
         SELECT COUNT(*)::int AS count
-        FROM billings
-        WHERE late_fee > 0
-        AND status IN ('Pending', 'Partial', 'Overdue')
+        FROM penalties
+        WHERE status IN ('Pending', 'Partially Paid')
       `),
 
       // Previous month penalties
       pool.query(`
         SELECT COUNT(*)::int AS count
-        FROM billings
-        WHERE late_fee > 0
-        AND status IN ('Pending', 'Partial', 'Overdue')
+        FROM penalties
+        WHERE status IN ('Pending', 'Partially Paid')
         AND DATE_TRUNC('month', created_at)
           = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
       `),
