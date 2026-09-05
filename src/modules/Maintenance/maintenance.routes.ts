@@ -1,6 +1,7 @@
 import {
     createMaintenanceRequest,
     getSubmittedMaintenance,
+    getMaintenanceHistory,
     assignMaintenanceRequest,
     updateMaintenanceStatus,
     updateMaintenanceRequest,
@@ -20,6 +21,7 @@ const router = express.Router()
 
 router.post("/requests", checkAuth, upload.single("image"), createMaintenanceRequest)
 router.get("/get-requests", checkAuth, getSubmittedMaintenance)
+router.get("/history", checkAuth, getMaintenanceHistory)
 router.put("/assign/:id", checkAuth, assignMaintenanceRequest)
 router.put("/status/:id", checkAuth, upload.single("image"), updateMaintenanceStatus)
 router.put("/requests/:id", checkAuth, updateMaintenanceRequest)

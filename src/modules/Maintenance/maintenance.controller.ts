@@ -243,6 +243,99 @@ export const getSubmittedMaintenance = async (
   }
 };
 
+export const getMaintenanceHistory = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        mr.id,
+        mr.request_number,
+        mr.user_id,
+        mr.room_id,
+        mr.category,
+        mr.description,
+        mr.image_url,
+        mr.status,
+        mr.created_at,
+        mr.updated_at,
+
+        CONCAT(
+          u.first_name,
+          ' ',
+          u.last_name
+        ) AS requested_by,
+
+        u.email,
+        u.contact_number,
+
+        r.room_number,
+
+        CONCAT(
+          staff.first_name,
+          ' ',
+          staff.last_name
+        ) AS assigned_staff,
+
+        closing.remarks,
+        closing.created_at AS resolved_at,
+
+        CONCAT(
+          closer.first_name,
+          ' ',
+          closer.last_name
+        ) AS closed_by
+
+      FROM maintenance_requests mr
+
+      JOIN users u
+        ON u.id = mr.user_id
+
+      JOIN rooms r
+        ON r.id = mr.room_id
+
+      LEFT JOIN users staff
+        ON staff.id = mr.assigned_staff_id
+
+      LEFT JOIN LATERAL (
+        SELECT remarks, created_at, updated_by
+        FROM maintenance_history mh
+        WHERE mh.maintenance_id = mr.id
+          AND mh.status = 'Closed'
+        ORDER BY mh.created_at DESC
+        LIMIT 1
+      ) closing ON true
+
+      LEFT JOIN users closer
+        ON closer.id = closing.updated_by
+
+      WHERE
+        mr.status = 'Closed'
+
+      ORDER BY
+        COALESCE(closing.created_at, mr.updated_at) DESC
+      `
+    );
+
+    return res.json(result.rows);
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
+
 export const assignMaintenanceRequest = async (
   req: AuthRequest,
   res: Response
