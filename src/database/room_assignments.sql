@@ -1,4 +1,4 @@
-CREATE TABLE room_assignments (
+CREATE TABLE IF NOT EXISTS room_assignments (
     id SERIAL PRIMARY KEY,
 
     user_id INTEGER NOT NULL
@@ -34,7 +34,7 @@ CREATE TABLE room_assignments (
 );
 
 ALTER TABLE room_assignments
-DROP CONSTRAINT room_assignments_room_id_fkey;
+DROP CONSTRAINT IF EXISTS room_assignments_room_id_fkey;
 
 ALTER TABLE room_assignments
 ADD CONSTRAINT room_assignments_room_id_fkey
@@ -42,15 +42,15 @@ FOREIGN KEY (room_id)
 REFERENCES rooms(id)
 ON DELETE CASCADE;
 
-CREATE INDEX idx_room_assignments_user
+CREATE INDEX IF NOT EXISTS idx_room_assignments_user
 ON room_assignments(user_id);
 
-CREATE INDEX idx_room_assignments_room
+CREATE INDEX IF NOT EXISTS idx_room_assignments_room
 ON room_assignments(room_id);
 
-CREATE INDEX idx_room_assignments_status
+CREATE INDEX IF NOT EXISTS idx_room_assignments_status
 ON room_assignments(status);
 
-CREATE UNIQUE INDEX uq_user_active_room
+CREATE UNIQUE INDEX IF NOT EXISTS uq_user_active_room
 ON room_assignments(user_id)
 WHERE status = 'Active';

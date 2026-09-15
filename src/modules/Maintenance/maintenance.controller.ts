@@ -944,9 +944,94 @@ export const getBoarderRequests = async (
       LEFT JOIN users staff
         ON staff.id = mr.assigned_staff_id
 
-      WHERE mr.user_id = $1
+      WHERE
+        mr.user_id = $1
+        AND mr.status != 'Closed'
 
       ORDER BY mr.created_at DESC
+      `,
+      [req.user.id]
+    );
+
+    return res.json(result.rows);
+
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
+
+export const getBoarderMaintenanceHistory = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        mr.id,
+        mr.request_number,
+        mr.user_id,
+        mr.room_id,
+        mr.category,
+        mr.description,
+        mr.image_url,
+        mr.status,
+        mr.created_at,
+        mr.updated_at,
+
+        r.room_number,
+
+        CONCAT(
+          staff.first_name,
+          ' ',
+          staff.last_name
+        ) AS assigned_staff,
+
+        closing.remarks,
+        closing.created_at AS resolved_at,
+
+        CONCAT(
+          closer.first_name,
+          ' ',
+          closer.last_name
+        ) AS closed_by
+
+      FROM maintenance_requests mr
+
+      JOIN rooms r
+        ON r.id = mr.room_id
+
+      LEFT JOIN users staff
+        ON staff.id = mr.assigned_staff_id
+
+      LEFT JOIN LATERAL (
+        SELECT remarks, created_at, updated_by
+        FROM maintenance_history mh
+        WHERE mh.maintenance_id = mr.id
+          AND mh.status = 'Closed'
+        ORDER BY mh.created_at DESC
+        LIMIT 1
+      ) closing ON true
+
+      LEFT JOIN users closer
+        ON closer.id = closing.updated_by
+
+      WHERE
+        mr.user_id = $1
+        AND mr.status = 'Closed'
+
+      ORDER BY
+        COALESCE(closing.created_at, mr.updated_at) DESC
       `,
       [req.user.id]
     );

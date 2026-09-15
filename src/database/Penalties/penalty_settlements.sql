@@ -1,4 +1,4 @@
-CREATE TABLE penalty_settlements (
+CREATE TABLE IF NOT EXISTS penalty_settlements (
     id SERIAL PRIMARY KEY,
 
     penalty_id INTEGER NOT NULL

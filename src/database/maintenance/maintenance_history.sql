@@ -1,4 +1,4 @@
-CREATE TABLE maintenance_history (
+CREATE TABLE IF NOT EXISTS maintenance_history (
     id SERIAL PRIMARY KEY,
 
     maintenance_id INTEGER NOT NULL

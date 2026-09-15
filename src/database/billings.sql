@@ -1,4 +1,4 @@
-CREATE TABLE billings (
+CREATE TABLE IF NOT EXISTS billings (
     id SERIAL PRIMARY KEY,
     billing_no VARCHAR(50) UNIQUE NOT NULL,
     room_number VARCHAR(50),

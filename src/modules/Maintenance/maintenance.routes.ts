@@ -8,6 +8,7 @@ import {
     getMyAssignedMaintenance,
     getMySubmittedRequest,
     getBoarderRequests,
+    getBoarderMaintenanceHistory,
     getAllStaffAssignedMaintenance,
     updateAssignedMaintenanceRequest,
     updateMySubmittedMaintenanceRequest,
@@ -29,6 +30,7 @@ router.put("/requests/:id", checkAuth, updateMaintenanceRequest)
 router.get("/my-assigned", checkAuth, getMyAssignedMaintenance)
 router.get("/my-submitted", checkAuth, getMySubmittedRequest)
 router.get("/boarder", checkAuth, getBoarderRequests)
+router.get("/boarder/history", checkAuth, getBoarderMaintenanceHistory)
 router.get("/all-staff-assigned", checkAuth, getAllStaffAssignedMaintenance)
 router.put("/staff/update/:id", checkAuth, updateAssignedMaintenanceRequest)
 router.put("/my-submitted/update/:id", checkAuth, updateMySubmittedMaintenanceRequest)

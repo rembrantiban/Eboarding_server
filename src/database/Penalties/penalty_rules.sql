@@ -1,4 +1,4 @@
-CREATE TABLE penalty_rules (
+CREATE TABLE IF NOT EXISTS penalty_rules (
     id SERIAL PRIMARY KEY,
 
     penalty_name VARCHAR(150) NOT NULL,

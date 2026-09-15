@@ -1,4 +1,4 @@
-CREATE TABLE penalties (
+CREATE TABLE IF NOT EXISTS penalties (
     id SERIAL PRIMARY KEY,
 
     penalty_rule_id INTEGER

@@ -1,5 +1,5 @@
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
 
   user_id_no VARCHAR(8) UNIQUE NOT NULL,
@@ -64,7 +64,7 @@ emergency_contact_name VARCHAR(100),
   DEFAULT 'Active'
   CHECK (account_status IN ('Active', 'Deactivate')),
   reset_code VARCHAR(10),
-  reset_code_expiry TIMESTAMP
+  reset_code_expiry TIMESTAMP,
   is_deleted BOOLEAN DEFAULT FALSE,
   deleted_at TIMESTAMP,
   deleted_by INT,
@@ -80,6 +80,8 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
 
 CREATE TRIGGER update_users_updated_at
 BEFORE UPDATE ON users
@@ -117,6 +119,8 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS generate_user_id_trigger ON users;
 
 CREATE TRIGGER generate_user_id_trigger
 BEFORE INSERT ON users

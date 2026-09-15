@@ -1,4 +1,4 @@
-CREATE TABLE boarders (
+CREATE TABLE IF NOT EXISTS boarders (
   id SERIAL PRIMARY KEY,
 
   user_id INTEGER NOT NULL

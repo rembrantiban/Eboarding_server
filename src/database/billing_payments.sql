@@ -1,4 +1,4 @@
-CREATE TABLE billing_payments (
+CREATE TABLE IF NOT EXISTS billing_payments (
     id SERIAL PRIMARY KEY,
 
     billing_id INT NOT NULL
@@ -26,5 +26,5 @@ CREATE TABLE billing_payments (
     received_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_billing_payments_billing
+CREATE INDEX IF NOT EXISTS idx_billing_payments_billing
 ON billing_payments(billing_id);

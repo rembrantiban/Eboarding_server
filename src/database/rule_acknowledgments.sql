@@ -1,4 +1,4 @@
-CREATE TABLE rule_acknowledgments (
+CREATE TABLE IF NOT EXISTS rule_acknowledgments (
     id SERIAL PRIMARY KEY,
 
     user_id INTEGER NOT NULL,

@@ -1,4 +1,4 @@
-CREATE TABLE announcement_notifications (
+CREATE TABLE IF NOT EXISTS announcement_notifications (
     id SERIAL PRIMARY KEY,
 
     announcement_id INT NOT NULL,

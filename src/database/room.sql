@@ -1,4 +1,4 @@
-    CREATE TABLE rooms (
+    CREATE TABLE IF NOT EXISTS rooms (
         id SERIAL PRIMARY KEY,
 
         room_number VARCHAR(50) UNIQUE NOT NULL,
@@ -27,10 +27,10 @@
     );
 
     -- Indexes
-    CREATE INDEX idx_rooms_status
+    CREATE INDEX IF NOT EXISTS idx_rooms_status
     ON rooms(status);
 
-    CREATE INDEX idx_rooms_price
+    CREATE INDEX IF NOT EXISTS idx_rooms_price
     ON rooms(price_per_month);
 
     -- Auto update updated_at
@@ -41,6 +41,8 @@
         RETURN NEW;
     END;
     $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS update_rooms_updated_at ON rooms;
 
     CREATE TRIGGER update_rooms_updated_at
     BEFORE UPDATE ON rooms

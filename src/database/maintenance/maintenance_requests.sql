@@ -1,4 +1,4 @@
-CREATE TABLE maintenance_requests (
+CREATE TABLE IF NOT EXISTS maintenance_requests (
     id SERIAL PRIMARY KEY,
 
     request_number VARCHAR(30) UNIQUE NOT NULL,

@@ -1,5 +1,5 @@
 
-CREATE TABLE room_images (
+CREATE TABLE IF NOT EXISTS room_images (
   id SERIAL PRIMARY KEY,
   room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE,
   image_url TEXT NOT NULL
