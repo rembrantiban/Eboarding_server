@@ -1,0 +1,9 @@
+ALTER TABLE rooms
+    ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS deleted_by INTEGER
+        REFERENCES users(id)
+        ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_rooms_is_deleted
+    ON rooms(is_deleted);

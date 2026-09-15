@@ -5,6 +5,8 @@ import {
   createRoom,
   updateRoom,
   deleteRoom,
+  restoreRoom,
+  getDeletedRooms,
   getAvailableRoomsWithBeds,
   getDashboardStats,
   getOccupancyTrend,
@@ -20,8 +22,8 @@ import {
   getRecentActivities,
   getRoomReport,
   getReportInsights
-  
-  
+
+
 } from "./room.controller";
 import { upload } from "../../lib/upload";
 import { checkAuth } from "../../middleware/checkAuth";
@@ -32,6 +34,8 @@ router.get("/get-all", getAllRooms);
 router.post("/create", upload.array("images", 5), createRoom);
 router.put("/update-room/:id", verifyAdmin, upload.array("images", 5), updateRoom);
 router.delete("/delete/:id", verifyAdmin, deleteRoom);
+router.get("/deleted", verifyAdmin, getDeletedRooms);
+router.put("/restore/:id", verifyAdmin, restoreRoom);
 router.get("/available", getAvailableRoomsWithBeds);
 router.get("/dashboard-stats", getDashboardStats);
 router.get("/occupancy-trend", getOccupancyTrend);

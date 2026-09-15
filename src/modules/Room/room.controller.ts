@@ -54,6 +54,8 @@ export const getAllRooms = async (req: Request, res: Response) => {
       ) beds
       ON beds.room_id = r.id
 
+      WHERE r.is_deleted = FALSE
+
       ORDER BY r.id DESC;
     `);
 
@@ -133,6 +135,7 @@ export const getAvailableRooms = async (
 
       WHERE
         r.status = 'Available'
+        AND r.is_deleted = FALSE
 
       ORDER BY
         r.room_number;
@@ -385,7 +388,7 @@ export const updateRoom = async (req: Request, res: Response) => {
     await client.query("BEGIN");
 
     const roomCheck = await client.query(
-      "SELECT * FROM rooms WHERE id = $1",
+      "SELECT * FROM rooms WHERE id = $1 AND is_deleted = FALSE",
       [id]
     );
 
@@ -619,13 +622,12 @@ export const updateRoom = async (req: Request, res: Response) => {
   }
 };
 
-export const deleteRoom = async (req: Request, res: Response) => {
+export const deleteRoom = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 
-
     const roomCheck = await pool.query(
-      "SELECT * FROM rooms WHERE id = $1",
+      "SELECT * FROM rooms WHERE id = $1 AND is_deleted = FALSE",
       [id]
     );
 
@@ -653,52 +655,126 @@ export const deleteRoom = async (req: Request, res: Response) => {
       });
     }
 
-
-    const imagesResult = await pool.query(
-      "SELECT image_url FROM room_images WHERE room_id = $1",
-      [id]
-    );
-
-    for (const img of imagesResult.rows) {
-      const url: string = img.image_url;
-
-      // Extract public_id from URL
-      const parts = url.split("/");
-      const fileName = parts[parts.length - 1]; // abc123.jpg
-      const publicId = `rooms/${fileName.split(".")[0]}`;
-
-      try {
-        await cloudinary.uploader.destroy(publicId);
-      } catch (err) {
-        console.warn("Failed to delete image from cloudinary:", publicId);
-      }
-    }
-
-
-    // 1. Delete images table
-    await pool.query(
-      "DELETE FROM room_images WHERE room_id = $1",
-      [id]
-    );
-
-    // 2. Delete beds
-    await pool.query(
-      "DELETE FROM beds WHERE room_id = $1",
-      [id]
-    );
-
-    // 3. Delete room
-    await pool.query(
-      "DELETE FROM rooms WHERE id = $1",
-      [id]
+    // Soft delete — the room, its beds, and its images are kept so the
+    // room can be restored later instead of losing the data permanently.
+    const result = await pool.query(
+      `
+      UPDATE rooms
+      SET
+        is_deleted = TRUE,
+        deleted_at = NOW(),
+        deleted_by = $2
+      WHERE id = $1
+      RETURNING *
+      `,
+      [id, req.user?.id]
     );
 
     res.json({
-      message: "Room, beds, and images deleted successfully",
+      message: "Room moved to trash successfully",
+      room: result.rows[0],
     });
 
   } catch (error) {
     console.error("Delete room error:", error);
+
+    res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
+
+export const restoreRoom = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const roomCheck = await pool.query(
+      "SELECT * FROM rooms WHERE id = $1 AND is_deleted = TRUE",
+      [id]
+    );
+
+    if (roomCheck.rows.length === 0) {
+      return res.status(404).json({
+        message: "Deleted room not found",
+      });
+    }
+
+    const existingActive = await pool.query(
+      "SELECT id FROM rooms WHERE room_number = $1 AND is_deleted = FALSE",
+      [roomCheck.rows[0].room_number]
+    );
+
+    if (existingActive.rows.length > 0) {
+      return res.status(400).json({
+        message:
+          "A room with this room number already exists. Rename the active room before restoring this one.",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE rooms
+      SET
+        is_deleted = FALSE,
+        deleted_at = NULL,
+        deleted_by = NULL
+      WHERE id = $1
+      RETURNING *
+      `,
+      [id]
+    );
+
+    res.json({
+      message: "Room restored successfully",
+      room: result.rows[0],
+    });
+
+  } catch (error) {
+    console.error("Restore room error:", error);
+
+    res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
+
+export const getDeletedRooms = async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        r.id,
+        r.room_number,
+        r.capacity,
+        r.price_per_month,
+        r.status,
+        r.deleted_at,
+
+        CONCAT(u.first_name, ' ', u.last_name) AS deleted_by_name,
+        u.avatar_url AS deleted_by_avatar,
+
+        COALESCE(beds.total_beds, 0) AS total_beds
+
+      FROM rooms r
+
+      LEFT JOIN users u
+        ON u.id = r.deleted_by
+
+      LEFT JOIN (
+          SELECT room_id, COUNT(*) AS total_beds
+          FROM beds
+          GROUP BY room_id
+      ) beds
+      ON beds.room_id = r.id
+
+      WHERE r.is_deleted = TRUE
+
+      ORDER BY r.deleted_at DESC;
+    `);
+
+    res.json(result.rows);
+
+  } catch (error) {
+    console.error("Get deleted rooms error:", error);
 
     res.status(500).json({
       message: "Server error",
@@ -749,7 +825,9 @@ export const getAvailableRoomsWithBeds = async (req: Request, res: Response) => 
     GROUP BY room_id
   ) images_data ON images_data.room_id = r.id
 
-  WHERE COALESCE(beds_data.available_beds, 0) > 0
+  WHERE
+    r.is_deleted = FALSE
+    AND COALESCE(beds_data.available_beds, 0) > 0
 
   ORDER BY r.id DESC
 `);
@@ -770,14 +848,14 @@ export const getDashboardStats = async (
 
     // TOTAL ROOMS
     const totalRoomsQuery = await pool.query(`
-      SELECT COUNT(*) FROM rooms
+      SELECT COUNT(*) FROM rooms WHERE is_deleted = FALSE
     `);
 
     // FULLY OCCUPIED ROOMS
     const fullyOccupiedQuery = await pool.query(`
-      SELECT COUNT(*) 
+      SELECT COUNT(*)
       FROM rooms
-      WHERE status = 'Occupied'
+      WHERE status = 'Occupied' AND is_deleted = FALSE
     `);
 
     // OCCUPIED BEDS
@@ -993,6 +1071,8 @@ export const getRoomAvailabilityChart = async (
         ON ra.bed_id = b.id
        AND ra.status = 'Active'
 
+      WHERE r.is_deleted = FALSE
+
       GROUP BY
         r.id,
         r.room_number
@@ -1080,6 +1160,7 @@ export const getRoomOccupancyChart = async (
         ) AS maintenance
 
       FROM rooms
+      WHERE is_deleted = FALSE
     `);
 
     const row = result.rows[0];
@@ -1138,6 +1219,8 @@ export const getRoomAvailabilityBed = async (
       LEFT JOIN beds b
         ON b.room_id = r.id
 
+      WHERE r.is_deleted = FALSE
+
       GROUP BY r.id, r.room_number
       ORDER BY r.room_number
     `);
@@ -1171,6 +1254,7 @@ export const getRoomReportStats = async (
         ) AS available_rooms
 
       FROM rooms
+      WHERE is_deleted = FALSE
     `);
 
     const row = result.rows[0];
@@ -1220,6 +1304,7 @@ export const getRoomStatusReport = async (
         ) AS maintenance
 
       FROM rooms
+      WHERE is_deleted = FALSE
     `);
 
     const row = result.rows[0];
@@ -1357,6 +1442,8 @@ export const getRoomReport = async (
       LEFT JOIN beds b
         ON b.room_id = r.id
 
+      WHERE r.is_deleted = FALSE
+
       GROUP BY
         r.id,
         r.room_number,
@@ -1418,6 +1505,7 @@ export const getReportInsights = async (
         ) AS maintenance_rooms
 
       FROM rooms
+      WHERE is_deleted = FALSE
     `);
 
     const row = result.rows[0];
@@ -1487,7 +1575,7 @@ export const updateRoomStatus = async (
       `
       SELECT *
       FROM rooms
-      WHERE id = $1
+      WHERE id = $1 AND is_deleted = FALSE
       `,
       [id]
     );

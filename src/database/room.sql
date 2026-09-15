@@ -47,7 +47,18 @@
     FOR EACH ROW
     EXECUTE FUNCTION update_rooms_updated_at_column();
 
-    {/* Implement automatic updates when assigning/removing boarders.*/}  
+    -- Soft delete support — safe to re-run, only adds what's missing.
+    ALTER TABLE rooms
+        ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS deleted_by INTEGER
+            REFERENCES users(id)
+            ON DELETE SET NULL;
+
+    CREATE INDEX IF NOT EXISTS idx_rooms_is_deleted
+    ON rooms(is_deleted);
+
+    {/* Implement automatic updates when assigning/removing boarders.*/}
 
     TRUNCATE TABLE payments, boarders RESTART IDENTITY CASCADE;
 

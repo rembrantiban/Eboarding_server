@@ -254,6 +254,99 @@ export const publishRule = async (
   }
 };
 
+export const acknowledgeRules = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  const userId = req.user?.id;
+
+  if (!userId) {
+    return res.status(401).json({
+      message: "Unauthorized",
+    });
+  }
+
+  try {
+    const result = await pool.query(
+      `
+      INSERT INTO rule_acknowledgments (user_id, acknowledged_at)
+      VALUES ($1, CURRENT_TIMESTAMP)
+
+      ON CONFLICT (user_id)
+      DO UPDATE SET acknowledged_at = CURRENT_TIMESTAMP
+
+      RETURNING acknowledged_at
+      `,
+      [userId]
+    );
+
+    return res.status(200).json({
+      message: "Rules acknowledged successfully.",
+      acknowledgedAt: result.rows[0].acknowledged_at,
+    });
+
+  } catch (error) {
+    console.error("Acknowledge rules error:", error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
+
+export const getAcknowledgmentStatus = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  const userId = req.user?.id;
+
+  if (!userId) {
+    return res.status(401).json({
+      message: "Unauthorized",
+    });
+  }
+
+  try {
+    const [ackResult, latestRuleResult] = await Promise.all([
+      pool.query(
+        `
+        SELECT acknowledged_at
+        FROM rule_acknowledgments
+        WHERE user_id = $1
+        `,
+        [userId]
+      ),
+      pool.query(
+        `
+        SELECT MAX(updated_at) AS latest_update
+        FROM rules_and_regulations
+        WHERE status = 'Published'
+        `
+      ),
+    ]);
+
+    const acknowledgedAt = ackResult.rows[0]?.acknowledged_at ?? null;
+    const latestRuleUpdate = latestRuleResult.rows[0]?.latest_update ?? null;
+
+    const needsAcknowledgment =
+      latestRuleUpdate !== null &&
+      (!acknowledgedAt || new Date(acknowledgedAt) < new Date(latestRuleUpdate));
+
+    return res.json({
+      acknowledgedAt,
+      latestRuleUpdate,
+      needsAcknowledgment,
+    });
+
+  } catch (error) {
+    console.error("Get acknowledgment status error:", error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
+
 export const unpublishRule = async (
   req: AuthRequest,
   res: Response
