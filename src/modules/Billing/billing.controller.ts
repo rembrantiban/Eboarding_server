@@ -1614,6 +1614,20 @@ export const getBillingStats = async (
                 )
             ),
 
+            previous_total_income AS (
+                SELECT
+                    COALESCE(
+                        SUM(amount),
+                        0
+                    ) AS total_income
+                FROM billing_payments
+                WHERE status IN ('Paid', 'Partial')
+                AND received_at < DATE_TRUNC(
+                    'month',
+                    CURRENT_DATE
+                )
+            ),
+
             previous_month AS (
                 SELECT
 
@@ -1733,6 +1747,7 @@ export const getBillingStats = async (
                 cm.collected_this_month,
                 cm.late_fees_collected,
 
+                pti.total_income AS previous_total_income,
                 pm.collected_this_month AS previous_collected,
                 pm.late_fees_collected AS previous_late_fees,
 
@@ -1740,6 +1755,7 @@ export const getBillingStats = async (
                 pcr.rate AS previous_collection_rate
 
             FROM current_month cm
+            CROSS JOIN previous_total_income pti
             CROSS JOIN previous_month pm
             CROSS JOIN current_collection_rate ccr
             CROSS JOIN previous_collection_rate pcr
@@ -1766,6 +1782,12 @@ export const getBillingStats = async (
         return res.status(200).json({
             totalIncome:
                 Number(stats.total_income),
+
+            totalIncomeChange:
+                calculateChange(
+                    Number(stats.total_income),
+                    Number(stats.previous_total_income)
+                ),
 
             lateFeesCollected:
                 Number(stats.late_fees_collected),
