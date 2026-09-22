@@ -3,9 +3,15 @@ CREATE TABLE IF NOT EXISTS maintenance_requests (
 
     request_number VARCHAR(30) UNIQUE NOT NULL,
 
+    -- The boarder the issue is about (drives "Requested By").
     user_id INTEGER NOT NULL
         REFERENCES users(id)
         ON DELETE CASCADE,
+
+    -- Who filed the request (self for a boarder; the staff member when filed on a boarder's behalf).
+    created_by INTEGER
+        REFERENCES users(id)
+        ON DELETE SET NULL,
 
     room_id INTEGER NOT NULL
         REFERENCES rooms(id)

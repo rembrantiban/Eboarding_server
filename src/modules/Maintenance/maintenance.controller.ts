@@ -20,6 +20,7 @@ export const createMaintenanceRequest = async (
       category,
       description,
       room_id,
+      boarder_id,
     } = req.body;
 
     if (!category || !description || !room_id) {
@@ -27,6 +28,19 @@ export const createMaintenanceRequest = async (
         message: "Category, room and description are required.",
       });
     }
+
+    // Staff/Admin file requests on behalf of a boarder; boarders file their own.
+    const isFilingForSomeoneElse = req.user.user_type !== "Boarder";
+
+    if (isFilingForSomeoneElse && !boarder_id) {
+      return res.status(400).json({
+        message: "Select the boarder this request is for.",
+      });
+    }
+
+    const requestingUserId = isFilingForSomeoneElse
+      ? Number(boarder_id)
+      : req.user.id;
 
     await client.query("BEGIN");
 
@@ -89,6 +103,7 @@ if (req.file) {
       (
         request_number,
         user_id,
+        created_by,
         room_id,
         category,
         description,
@@ -104,6 +119,7 @@ if (req.file) {
         $4,
         $5,
         $6,
+        $7,
         'Pending'
       )
 
@@ -111,6 +127,7 @@ if (req.file) {
       `,
       [
         requestNumber,
+        requestingUserId,
         req.user.id,
         room_id,
         category,
@@ -167,6 +184,67 @@ if (req.file) {
   } finally {
 
     client.release();
+
+  }
+};
+
+export const getBoardersForRequest = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        u.id,
+
+        CONCAT(
+          u.first_name,
+          ' ',
+          u.last_name
+        ) AS name,
+
+        r.room_number,
+        b.bed_number
+
+      FROM users u
+
+      JOIN room_assignments ra
+        ON ra.user_id = u.id
+        AND ra.status = 'Active'
+
+      JOIN rooms r
+        ON r.id = ra.room_id
+
+      JOIN beds b
+        ON b.id = ra.bed_id
+
+      WHERE
+        u.user_type = 'Boarder'
+        AND u.is_deleted = FALSE
+        AND u.account_status = 'Active'
+
+      ORDER BY
+        u.first_name,
+        u.last_name
+      `
+    );
+
+    return res.json(result.rows);
+
+  } catch (error) {
+
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
 
   }
 };
@@ -785,7 +863,13 @@ export const getMyAssignedMaintenance = async (
           u.first_name,
           ' ',
           u.last_name
-        ) AS boarder,
+        ) AS requested_by,
+
+        CONCAT(
+          creator.first_name,
+          ' ',
+          creator.last_name
+        ) AS created_by_name,
 
         r.room_number
 
@@ -793,6 +877,9 @@ export const getMyAssignedMaintenance = async (
 
       JOIN users u
         ON u.id = mr.user_id
+
+      LEFT JOIN users creator
+        ON creator.id = mr.created_by
 
       JOIN rooms r
         ON r.id = mr.room_id
@@ -856,6 +943,18 @@ export const getMySubmittedRequest = async (
         r.room_number,
 
         CONCAT(
+          u.first_name,
+          ' ',
+          u.last_name
+        ) AS requested_by,
+
+        CONCAT(
+          creator.first_name,
+          ' ',
+          creator.last_name
+        ) AS created_by_name,
+
+        CONCAT(
           staff.first_name,
           ' ',
           staff.last_name
@@ -866,11 +965,17 @@ export const getMySubmittedRequest = async (
       JOIN rooms r
         ON r.id = mr.room_id
 
+      JOIN users u
+        ON u.id = mr.user_id
+
+      LEFT JOIN users creator
+        ON creator.id = mr.created_by
+
       LEFT JOIN users staff
         ON staff.id = mr.assigned_staff_id
 
       WHERE
-        mr.user_id = $1
+        mr.created_by = $1
 
       ORDER BY
         mr.created_at DESC
