@@ -60,7 +60,6 @@
     CREATE INDEX IF NOT EXISTS idx_rooms_is_deleted
     ON rooms(is_deleted);
 
-    {/* Implement automatic updates when assigning/removing boarders.*/}
 
     TRUNCATE TABLE payments, boarders RESTART IDENTITY CASCADE;
 

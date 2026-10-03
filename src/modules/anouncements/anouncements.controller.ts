@@ -2,6 +2,44 @@ import { Request, Response } from "express";
 import { pool } from "../../config/db"
 import { AuthRequest } from "../../types/auth";
 
+// Which users an audience targets
+const AUDIENCE_USER_FILTER: Record<string, string> = {
+  Boarders: "WHERE user_type = 'Boarder'",
+  Staff: "WHERE user_type = 'Staff'",
+  All: "",
+};
+
+// Creates the missing notification rows for everyone in an announcement's audience
+// (used when an announcement's audience changes, e.g. Boarders -> All).
+const notifyAudience = async (announcementId: number | string, audience: string) => {
+  await pool.query(
+    `
+    INSERT INTO announcement_notifications (announcement_id, user_id)
+    SELECT $1, id
+    FROM users
+    ${AUDIENCE_USER_FILTER[audience] ?? AUDIENCE_USER_FILTER.Boarders}
+    ON CONFLICT (announcement_id, user_id) DO NOTHING
+    `,
+    [announcementId]
+  );
+};
+
+// Gives a user notification rows for every active announcement aimed at them that
+// they don't have yet — covers accounts created after the announcement was posted.
+const backfillUserNotifications = async (userId: number, audience: string) => {
+  await pool.query(
+    `
+    INSERT INTO announcement_notifications (announcement_id, user_id)
+    SELECT a.id, $1
+    FROM announcements a
+    WHERE a.status = 'Active'
+      AND (a.audience = 'All' OR a.audience = $2)
+    ON CONFLICT (announcement_id, user_id) DO NOTHING
+    `,
+    [userId, audience]
+  );
+};
+
 export const createAnnouncement = async (
   req: AuthRequest,
   res: Response
@@ -67,51 +105,7 @@ export const createAnnouncement = async (
 
     const announcement = announcementResult.rows[0];
 
-    if (audience === "Boarders") {
-      await pool.query(
-        `
-        INSERT INTO announcement_notifications (
-          announcement_id,
-          user_id
-        )
-        SELECT
-          $1,
-          id
-        FROM users
-        WHERE user_type = 'Boarder'
-        `,
-        [announcement.id]
-      );
-    } else if (audience === "Staff") {
-      await pool.query(
-        `
-        INSERT INTO announcement_notifications (
-          announcement_id,
-          user_id
-        )
-        SELECT
-          $1,
-          id
-        FROM users
-        WHERE user_type = 'Staff'
-        `,
-        [announcement.id]
-      );
-    } else {
-      await pool.query(
-        `
-        INSERT INTO announcement_notifications (
-          announcement_id,
-          user_id
-        )
-        SELECT
-          $1,
-          id
-        FROM users
-        `,
-        [announcement.id]
-      );
-    }
+    await notifyAudience(announcement.id, audience);
 
     return res.status(201).json({
       message: "Announcement created successfully.",
@@ -268,6 +262,12 @@ export const updateAnnouncement = async (
       ]
     );
 
+    // Make sure everyone in the (possibly new) audience can see it
+    const newAudience = audience ?? existing.rows[0].audience;
+    if (newAudience !== existing.rows[0].audience) {
+      await notifyAudience(existing.rows[0].id, newAudience);
+    }
+
     return res.json({
       message: "Announcement updated successfully.",
       announcement: updated.rows[0],
@@ -347,6 +347,8 @@ export const getUserAnnouncements = async (
         ? "Staff"
         : "All";
 
+    await backfillUserNotifications(userId, audience);
+
     const result = await pool.query(
       `
       SELECT
@@ -425,6 +427,8 @@ export const getUnreadCount = async (
         : userType === "Staff"
         ? "Staff"
         : "All";
+
+    await backfillUserNotifications(userId, audience);
 
     const result = await pool.query(
       `
