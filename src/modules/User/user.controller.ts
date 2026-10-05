@@ -374,11 +374,12 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
         emergency_contact_number,
         emergency_contact_relationship,
         user_type,
-        status
+        status,
+        valid_id_status
       )
       VALUES
       (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'Approved'
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'Approved','Approved'
       )
 
       RETURNING
@@ -401,7 +402,8 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
         emergency_contact_number,
         emergency_contact_relationship,
         user_type,
-        status
+        status,
+        valid_id_status
       `,
       [
         first_name,
@@ -549,11 +551,12 @@ export const createUserByStaff = async (req: Request, res: Response) => {
         emergency_contact_number,
         emergency_contact_relationship,
         user_type,
-        status
+        status,
+        valid_id_status
       )
       VALUES
       (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'Approved'
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'Approved','Approved'
       )
 
       RETURNING
@@ -576,7 +579,8 @@ export const createUserByStaff = async (req: Request, res: Response) => {
         emergency_contact_number,
         emergency_contact_relationship,
         user_type,
-        status
+        status,
+        valid_id_status
       `,
       [
         first_name,
