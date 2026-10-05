@@ -1653,3 +1653,80 @@ export const updateRoomStatus = async (
     });
   }
 };
+export const getRoomBeds = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const roomResult = await pool.query(
+      `
+      SELECT id, room_number, capacity, price_per_month, status
+      FROM rooms
+      WHERE id = $1 AND is_deleted = FALSE
+      `,
+      [id]
+    );
+
+    if (roomResult.rows.length === 0) {
+      return res.status(404).json({ message: "Room not found" });
+    }
+
+    // A bed is occupied when it has an Active assignment
+    const bedsResult = await pool.query(
+      `
+      SELECT
+        b.id,
+        b.bed_number,
+        CASE WHEN ra.id IS NULL THEN 'Available' ELSE 'Occupied' END AS status,
+
+        CASE WHEN ra.id IS NULL THEN NULL ELSE
+          json_build_object(
+            'id', u.id,
+            'user_id_no', u.user_id_no,
+            'first_name', u.first_name,
+            'last_name', u.last_name,
+            'email', u.email,
+            'avatar_url', u.avatar_url,
+            'gender', u.gender,
+            'contact_number', u.contact_number,
+            'country_code', u.country_code,
+            'assigned_date', ra.assigned_date,
+            'expected_checkout', ra.expected_checkout
+          )
+        END AS occupant
+
+      FROM beds b
+
+      LEFT JOIN room_assignments ra
+        ON ra.bed_id = b.id
+        AND ra.status = 'Active'
+
+      LEFT JOIN users u
+        ON u.id = ra.user_id
+
+      WHERE b.room_id = $1
+
+      ORDER BY LENGTH(b.bed_number), b.bed_number
+      `,
+      [id]
+    );
+
+    const beds = bedsResult.rows;
+    const occupied = beds.filter((bed) => bed.status === "Occupied").length;
+
+    return res.status(200).json({
+      room: roomResult.rows[0],
+      beds,
+      summary: {
+        total: beds.length,
+        occupied,
+        available: beds.length - occupied,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Failed to fetch room beds",
+    });
+  }
+};

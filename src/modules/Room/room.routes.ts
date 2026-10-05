@@ -21,7 +21,8 @@ import {
   getRoomStatusReport,
   getRecentActivities,
   getRoomReport,
-  getReportInsights
+  getReportInsights,
+  getRoomBeds
 
 
 } from "./room.controller";
@@ -51,5 +52,6 @@ router.get("/room-status-report", checkAuth, getRoomStatusReport);
 router.get("/recent-activities", checkAuth, getRecentActivities);
 router.get("/room-report", checkAuth, getRoomReport);
 router.get("/report-insights", checkAuth, getReportInsights);
+router.get("/:id/beds", checkAuth, getRoomBeds);
 
   export default router;
