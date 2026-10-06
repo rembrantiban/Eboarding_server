@@ -32,13 +32,14 @@ import {
 import { verifyAdmin } from "../../middleware/authMiddleware"
 import { checkAuth } from "../../middleware/checkAuth"
 import { upload } from "../../lib/upload"
+import { verifyTurnstile } from "../../middleware/verifyTurnstile"
 
 const router = express.Router();
 
 router.post( "/register", upload.fields([{ name: "avatar", maxCount: 1 },{ name: "valid_id_image", maxCount: 1 }, ]),
   register
 )       ;
-router.post("/login", login);
+router.post("/login", verifyTurnstile, login);
 router.post("/admin/users",upload.fields([{ name: "avatar", maxCount: 1 },{ name: "valid_id_image", maxCount: 1 }, ]), verifyAdmin, createUserByAdmin);
 router.post("/staff/users",upload.fields([{ name: "avatar", maxCount: 1 },{ name: "valid_id_image", maxCount: 1 }, ]), checkAuth, createUserByStaff);
 router.get("/users", checkAuth, getAllUsers);
