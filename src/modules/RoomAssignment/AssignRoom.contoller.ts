@@ -396,7 +396,7 @@ export const transferAssignment = async (
 
     await updateRoomStatus(client, current.room_id);
 
-    if (current.room_id !== room_id) {
+    if (Number(current.room_id) !== Number(room_id)) {
       await updateRoomStatus(client, room_id);
     }
 
@@ -429,29 +429,44 @@ export const transferAssignment = async (
 
     const newAssignment = newAssignmentResult.rows[0];
 
+    // ============================
+    // GET NEW ROOM / BED DETAILS
+    // ============================
+
     const roomResult = await client.query(
       `
-    SELECT price_per_month
-    FROM rooms
-    WHERE id = $1
-    `,
-      [room_id]
+      SELECT
+          r.room_number,
+          r.price_per_month,
+          b.bed_number
+      FROM rooms r
+      INNER JOIN beds b
+          ON b.id = $2
+      WHERE r.id = $1
+      `,
+      [room_id, bed_id]
     );
 
     if (roomResult.rowCount === 0) {
       throw new Error("Room not found.");
     }
 
-    const roomFee = Number(roomResult.rows[0].price_per_month);
+    const newRoom = roomResult.rows[0];
+    const roomFee = Number(newRoom.price_per_month);
 
     // ============================
-    // FIND CURRENT UNPAID BILLING
+    // FIND OPEN BILLINGS
+    // Upcoming / Pending / Partial bills
+    // follow the boarder to the new room.
+    // Overdue / Paid bills keep the old
+    // room's rate (time already stayed).
     // ============================
 
     const billingResult = await client.query(
       `
       SELECT
           id,
+          status,
           paid_amount,
           utilities_fee,
           other_charges,
@@ -461,20 +476,16 @@ export const transferAssignment = async (
       WHERE
           assignment_id = $1
       AND
-          status IN ('Pending', 'Partial')
-      ORDER BY created_at DESC
-      LIMIT 1
-  `,
+          status IN ('Upcoming', 'Pending', 'Partial')
+      `,
       [current.id]
     );
 
     // ============================
-    // MOVE BILLING TO NEW ASSIGNMENT
+    // MOVE BILLINGS TO NEW ASSIGNMENT
     // ============================
 
-    if (billingResult.rowCount! > 0) {
-
-      const billing = billingResult.rows[0];
+    for (const billing of billingResult.rows) {
 
       const totalAmount =
         roomFee +
@@ -483,33 +494,36 @@ export const transferAssignment = async (
         Number(billing.late_fee) -
         Number(billing.discount);
 
-      const balance =
-        totalAmount - Number(billing.paid_amount);
+      const paidAmount = Number(billing.paid_amount);
 
-      let status = "Pending";
+      const balance = Math.max(totalAmount - paidAmount, 0);
+
+      let status = billing.status === "Upcoming" ? "Upcoming" : "Pending";
 
       if (balance <= 0) {
         status = "Paid";
-      } else if (Number(billing.paid_amount) > 0) {
+      } else if (paidAmount > 0) {
         status = "Partial";
       }
 
       await client.query(
         `
-    UPDATE billings
-    SET
-        assignment_id = $1,
-        room_number = $2,
-        bed_number = $3,
-        room_fee = $4,
-        total_amount = $5,
-        balance = $6,
-        status = $7,
-        updated_at = NOW()
-    WHERE id = $8
-    `,
+        UPDATE billings
+        SET
+            assignment_id = $1,
+            room_number = $2,
+            bed_number = $3,
+            room_fee = $4,
+            total_amount = $5,
+            balance = $6,
+            status = $7,
+            updated_at = NOW()
+        WHERE id = $8
+        `,
         [
           newAssignment.id,
+          newRoom.room_number,
+          newRoom.bed_number,
           roomFee,
           totalAmount,
           balance,
@@ -517,7 +531,6 @@ export const transferAssignment = async (
           billing.id,
         ]
       );
-
     }
 
     await client.query("COMMIT");
