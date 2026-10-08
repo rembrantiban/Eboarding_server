@@ -877,11 +877,12 @@ export const checkoutAssignment = async (
     const current = assignment.rows[0];
 
     /**
-     * Check for any unpaid billing
-     * Previous Months + Current Month
+     * Block checkout if the boarder has any
+     * Pending, Partial or Overdue billing,
+     * regardless of billing month.
      *
      * Ignore:
-     * - Future billings
+     * - Upcoming billings
      * - Cancelled billings
      * - Fully paid billings
      */
@@ -898,10 +899,8 @@ export const checkoutAssignment = async (
         due_date
       FROM billings
       WHERE user_id = $1
-        AND balance > 0
-        AND status <> 'Cancelled'
-        AND billing_month <= DATE_TRUNC('month', CURRENT_DATE)
-      ORDER BY billing_month ASC
+        AND status IN ('Pending', 'Partial', 'Overdue')
+      ORDER BY due_date ASC
       `,
       [current.user_id]
     );
