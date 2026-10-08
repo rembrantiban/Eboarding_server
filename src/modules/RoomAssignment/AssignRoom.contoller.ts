@@ -890,6 +890,44 @@ export const checkoutAssignment = async (
     const current = assignment.rows[0];
 
     /**
+     * Newly assigned boarder (assigned today, not
+     * via a transfer): allow checkout and cancel
+     * this assignment's unpaid bills, since the
+     * boarder never actually stayed.
+     */
+    const newAssignmentCheck = await client.query(
+      `
+      SELECT
+        (ra.assigned_date = CURRENT_DATE)
+        AND NOT EXISTS (
+          SELECT 1
+          FROM room_assignments prev
+          WHERE prev.user_id = ra.user_id
+            AND prev.status = 'Transferred'
+            AND prev.actual_checkout::date = CURRENT_DATE
+        ) AS is_new
+      FROM room_assignments ra
+      WHERE ra.id = $1
+      `,
+      [id]
+    );
+
+    if (newAssignmentCheck.rows[0].is_new) {
+      await client.query(
+        `
+        UPDATE billings
+        SET
+          status = 'Cancelled',
+          updated_at = NOW()
+        WHERE assignment_id = $1
+          AND status IN ('Pending', 'Upcoming')
+          AND paid_amount = 0
+        `,
+        [id]
+      );
+    }
+
+    /**
      * Block checkout if the boarder has any
      * Pending, Partial or Overdue billing,
      * regardless of billing month.
