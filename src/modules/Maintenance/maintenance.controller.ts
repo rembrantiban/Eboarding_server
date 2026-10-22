@@ -1036,7 +1036,16 @@ export const getBoarderRequests = async (
           staff.first_name,
           ' ',
           staff.last_name
-        ) AS assigned_staff
+        ) AS assigned_staff,
+
+        resolution.remarks,
+        resolution.created_at AS resolved_at,
+
+        CONCAT(
+          resolver.first_name,
+          ' ',
+          resolver.last_name
+        ) AS resolved_by
 
       FROM maintenance_requests mr
 
@@ -1048,6 +1057,18 @@ export const getBoarderRequests = async (
 
       LEFT JOIN users staff
         ON staff.id = mr.assigned_staff_id
+
+      LEFT JOIN LATERAL (
+        SELECT remarks, created_at, updated_by
+        FROM maintenance_history mh
+        WHERE mh.maintenance_id = mr.id
+          AND mh.status = 'Resolved'
+        ORDER BY mh.created_at DESC
+        LIMIT 1
+      ) resolution ON true
+
+      LEFT JOIN users resolver
+        ON resolver.id = resolution.updated_by
 
       WHERE
         mr.user_id = $1
