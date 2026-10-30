@@ -928,6 +928,74 @@ export const getActivePenalties = async (
 };
 
 
+export const getMyOverduePenalties = async (
+    req: AuthRequest,
+    res: Response
+) => {
+    try {
+        const userId = req.user?.id;
+
+        if (!userId) {
+            return res.status(401).json({
+                message: "Unauthorized.",
+            });
+        }
+
+        const result = await pool.query(
+            `
+            SELECT
+                id,
+                billing_no,
+                billing_type,
+                billing_month,
+                due_date,
+                status,
+                overdue_weeks_charged,
+                total_amount,
+                balance,
+                updated_at
+            FROM billings
+            WHERE
+                user_id = $1
+            AND
+                overdue_weeks_charged > 0
+            AND
+                status <> 'Cancelled'
+            ORDER BY due_date DESC
+            `,
+            [userId]
+        );
+
+        const penalties = result.rows.map((b) => {
+            const weeks = Number(b.overdue_weeks_charged);
+
+            return {
+                ...b,
+                penalty_amount: weeks * OVERDUE_PENALTY_PER_WEEK,
+                penalty_message:
+                    b.status === "Overdue"
+                        ? overduePenaltyMessage(
+                            b.billing_no,
+                            weeks,
+                            weeks * OVERDUE_PENALTY_PER_WEEK
+                        )
+                        : null,
+            };
+        });
+
+        return res.status(200).json({
+            penalties,
+        });
+
+    } catch (error) {
+        console.error("Get My Overdue Penalties:", error);
+
+        return res.status(500).json({
+            message: "Server error.",
+        });
+    }
+};
+
 export const getMyPendingBilling = async (
     req: AuthRequest,
     res: Response

@@ -7,6 +7,7 @@ import {
     getOutstandingBalance,
     getActivePenalties,
     getMyPendingBilling,
+    getMyOverduePenalties,
     getMyPaymentHistory,
     getPaymentsOverview,
     getPaymentsOverviewTrend,
@@ -39,6 +40,7 @@ router.get("/payment-history", checkAuth, getPaymentHistory);
 router.get("/outstanding-balance", checkAuth, getOutstandingBalance);
 router.get("/active-penalties", checkAuth, getActivePenalties);
 router.get("/my-billing",checkAuth,getMyPendingBilling);
+router.get("/my-overdue-penalties", checkAuth, getMyOverduePenalties);
 router.get("/my-payment-history",checkAuth,getMyPaymentHistory);
 router.get("/payments-overview", checkAuth, getPaymentsOverview);
 router.get("/payments-overview-trend", checkAuth, getPaymentsOverviewTrend);
