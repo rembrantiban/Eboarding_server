@@ -211,3 +211,69 @@ export const createMonthlyBilling = async (
 
     return result.rows[0];
 };
+
+//----------------------------------------------------
+// Overdue Penalty (₱100 per week overdue)
+//----------------------------------------------------
+
+export const OVERDUE_PENALTY_PER_WEEK = 100;
+
+// Day 1-7 overdue = week 1, day 8-14 = week 2, ...
+export const OVERDUE_WEEKS_SQL =
+    `CEIL((CURRENT_DATE - b.due_date) / 7.0)::int`;
+
+export const overduePenaltyMessage = (
+    billingNo: string,
+    weeks: number,
+    totalPenalty: number
+) =>
+    `Your billing #${billingNo} is overdue by ${weeks} week${weeks === 1 ? "" : "s"}. ` +
+    `A penalty of ₱${OVERDUE_PENALTY_PER_WEEK} is added every week it stays unpaid ` +
+    `(₱${totalPenalty.toLocaleString()} so far). Please settle your balance as soon as possible.`;
+
+export const ensureOverduePenaltyColumn = async (client: PoolClient) => {
+    await client.query(
+        `
+        ALTER TABLE billings
+        ADD COLUMN IF NOT EXISTS overdue_weeks_charged INT NOT NULL DEFAULT 0
+        `
+    );
+};
+
+// Charges ₱100 for each overdue week not yet charged.
+// overdue_weeks_charged prevents charging the same week twice,
+// so the job is safe to run any number of times a day.
+export const applyOverduePenalties = async (client: PoolClient) => {
+    const result = await client.query(
+        `
+        UPDATE billings b
+        SET
+            late_fee = b.late_fee + ($1 * (${OVERDUE_WEEKS_SQL} - b.overdue_weeks_charged)),
+            total_amount = b.total_amount + ($1 * (${OVERDUE_WEEKS_SQL} - b.overdue_weeks_charged)),
+            balance = b.balance + ($1 * (${OVERDUE_WEEKS_SQL} - b.overdue_weeks_charged)),
+            overdue_weeks_charged = ${OVERDUE_WEEKS_SQL},
+            updated_at = NOW()
+        FROM users u
+        WHERE
+            u.id = b.user_id
+        AND
+            b.status = 'Overdue'
+        AND
+            b.due_date < CURRENT_DATE
+        AND
+            ${OVERDUE_WEEKS_SQL} > b.overdue_weeks_charged
+        RETURNING
+            b.billing_no,
+            b.balance,
+            b.due_date,
+            b.room_number,
+            b.bed_number,
+            b.overdue_weeks_charged,
+            u.email,
+            u.first_name
+        `,
+        [OVERDUE_PENALTY_PER_WEEK]
+    );
+
+    return result.rows;
+};

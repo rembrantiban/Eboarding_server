@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS billings (
     other_charges DECIMAL(10, 2) NOT NULL DEFAULT 0,
     discount DECIMAL(10, 2) NOT NULL DEFAULT 0,
     late_fee DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    overdue_weeks_charged INT NOT NULL DEFAULT 0,
     total_amount DECIMAL(10, 2) NOT NULL,
     paid_amount DECIMAL(10, 2) NOT NULL DEFAULT 0,
     balance DECIMAL(10, 2) NOT NULL,
@@ -29,3 +30,6 @@ CREATE TABLE IF NOT EXISTS billings (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+-- Run this if the table already exists:
+-- ALTER TABLE billings ADD COLUMN IF NOT EXISTS overdue_weeks_charged INT NOT NULL DEFAULT 0;

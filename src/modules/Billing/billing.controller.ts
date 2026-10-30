@@ -1,6 +1,10 @@
 import { Request, Response } from "express";
 import { pool } from "../../config/db";;
-import { createMonthlyBilling } from "./billing.helper";
+import {
+    OVERDUE_PENALTY_PER_WEEK,
+    createMonthlyBilling,
+    overduePenaltyMessage,
+} from "./billing.helper";
 import { AuthRequest } from "../../types/auth";
 
 export const recordPayment = async (
@@ -953,6 +957,7 @@ export const getMyPendingBilling = async (
 
             b.discount,
             b.late_fee,
+            b.overdue_weeks_charged,
 
             b.total_amount,
             b.paid_amount,
@@ -1017,8 +1022,37 @@ export const getMyPendingBilling = async (
             });
         }
 
+        //----------------------------------------------------
+        // Overdue Penalty Notice
+        //----------------------------------------------------
+
+        const billing = result.rows.map((b) => {
+            const weeks = Number(b.overdue_weeks_charged);
+
+            return {
+                ...b,
+                overdue_penalty: weeks * OVERDUE_PENALTY_PER_WEEK,
+                penalty_message:
+                    b.status === "Overdue" && weeks > 0
+                        ? overduePenaltyMessage(
+                            b.billing_no,
+                            weeks,
+                            weeks * OVERDUE_PENALTY_PER_WEEK
+                        )
+                        : null,
+            };
+        });
+
+        const overdueCount = billing.filter(
+            (b) => b.penalty_message
+        ).length;
+
         return res.status(200).json({
-            billing: result.rows,
+            billing,
+            message:
+                overdueCount > 0
+                    ? `You have ${overdueCount} overdue billing${overdueCount === 1 ? "" : "s"} with a weekly penalty of ₱${OVERDUE_PENALTY_PER_WEEK}. Please settle your balance as soon as possible.`
+                    : undefined,
         });
 
     } catch (error) {
